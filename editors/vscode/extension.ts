@@ -11,7 +11,7 @@ let client: LanguageClient;
 
 export function activate(context: ExtensionContext) {
   const serverPath = workspace.getConfiguration('vasp-lsp').get<string>('serverPath') || 'vasp-lsp';
-  
+
   const serverOptions: ServerOptions = {
     command: serverPath,
     args: ['--stdio'],

@@ -1,0 +1,15 @@
+{
+  "rule_id": "vasp.log.symmetry_failure",
+  "software": "vasp",
+  "file_type": "VASP_LOG",
+  "severity": "error",
+  "category": "preflight/runtime-risk",
+  "confidence": 0.9,
+  "source": "vasp-lsp-runtime",
+  "manual_ref": "https://www.vasp.at/wiki/index.php/ISYM",
+  "invalid_fixture": "tests/fixtures/logs/symmetry_failure.out",
+  "valid_fixture": "tests/fixtures/logs/symmetry_failure_valid.out",
+  "message_contains": "INVGRP",
+  "fix_hints_contains": "ISYM=0",
+  "blocking": true
+}

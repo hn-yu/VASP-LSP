@@ -42,7 +42,11 @@ INVGRP: inverse of rotation matrix was not found
     assert provider._get_file_type("file:///calc/slurm-123.out") == "VASP_LOG"
     assert len(diagnostics) == 1
     diagnostic = diagnostics[0]
-    assert diagnostic.code == "vasp.runtime.invgrp_symmetry"
+    # Symmetry-category runtime patterns roll up to the aggregated rule id
+    # vasp.log.symmetry_failure (#58). The detailed pattern id is preserved
+    # on ``data.pattern_id`` for traceability.
+    assert diagnostic.code == "vasp.log.symmetry_failure"
+    assert diagnostic.data["pattern_id"] == "vasp.runtime.invgrp_symmetry"
     assert diagnostic.severity == DiagnosticSeverity.Error
     assert diagnostic.source == "vasp-lsp-runtime"
     assert diagnostic.range.start.line == 1
@@ -59,9 +63,16 @@ def test_diagnostic_snapshot_includes_runtime_metadata() -> None:
     assert snapshot["file_type"] == "VASP_LOG"
     assert snapshot["summary"]["error"] == 1
     item = snapshot["diagnostics"][0]
-    assert item["code"] == "vasp.runtime.pssyevx_eigenvalues"
-    assert item["confidence"] == 0.86
-    assert item["category"] == "electronic_minimization"
+    # Electronic-minimization patterns roll up to the aggregated rule id
+    # vasp.log.electronic_minimization_failed (#59).
+    assert item["code"] == "vasp.log.electronic_minimization_failed"
+    assert item["pattern_id"] == "vasp.runtime.pssyevx_eigenvalues"
+    # Aggregated rule confidence takes precedence over the pattern's
+    # confidence; the original pattern confidence is preserved separately.
+    assert item["confidence"] == 0.88
+    assert item["pattern_confidence"] == 0.86
+    assert item["category"] == "preflight/runtime-risk"
+    assert item["pattern_category"] == "electronic_minimization"
     assert item["related_files"] == ["INCAR", "POSCAR", "OUTCAR", "stdout"]
 
 

@@ -24,6 +24,7 @@ from ..rules import (
     SMEARING_ISMEAR_SIGMA_MISMATCH,
     SPIN_MISSING_MAGMOM,
     get_rule_fix_hint,
+    rule_id_for_runtime_category,
 )
 from ..schemas.incar_tags import CALCULATION_MODES, CalculationMode, get_tag_info
 
@@ -119,6 +120,11 @@ class DiagnosticsProvider:
                     "related_files",
                     "suggested_actions",
                     "safe_to_auto_apply",
+                    "pattern_category",
+                    "pattern_confidence",
+                    "pattern_id",
+                    "fix_hints",
+                    "manual_ref",
                 ):
                     if key in data:
                         diag_dict[key] = data[key]
@@ -186,13 +192,22 @@ class DiagnosticsProvider:
         return "UNKNOWN"
 
     def _is_vasp_log_filename(self, filename: str) -> bool:
-        """Return whether a filename is a VASP runtime log."""
+        """Return whether a filename is a VASP runtime log.
+
+        Generic ``.OUT``/``.LOG`` extensions are recognised because VASP users
+        frequently redirect stdout/stderr to captures like ``vasp.out`` or
+        ``symmetry_failure.out``. The runtime log parser only fires on known
+        VASP runtime signatures, so recognising the extension cannot produce
+        spurious diagnostics on unrelated ``.out`` captures.
+        """
         upper_filename = filename.upper()
         if upper_filename in {"OUTCAR", "OSZICAR", "STDOUT", "STDERR", "VASP.OUT"}:
             return True
         if upper_filename.startswith("SLURM-") and upper_filename.endswith(".OUT"):
             return True
-        return upper_filename.endswith(".LOG")
+        if upper_filename.endswith((".OUT", ".LOG")):
+            return True
+        return False
 
     def _get_vasp_log_diagnostics(self, content: str, document_uri: str) -> List[Diagnostic]:
         """Get diagnostics for VASP runtime logs."""
@@ -208,34 +223,68 @@ class DiagnosticsProvider:
             action_suffix = f" Suggested actions: {', '.join(action_titles)}."
         line_text = runtime_diagnostic.line_text.strip()
         end_character = max(len(runtime_diagnostic.line_text), 1)
+        # When the runtime pattern's category has an aggregated first-class
+        # rule (e.g. symmetry → vasp.log.symmetry_failure), surface the rule
+        # id as the LSP diagnostic ``code`` and keep the specific runtime
+        # pattern id in ``data.pattern_id`` for traceability. Otherwise the
+        # diagnostic code stays the specific pattern id.
+        aggregated_rule_id = rule_id_for_runtime_category(runtime_diagnostic.category)
+        diagnostic_code = aggregated_rule_id or runtime_diagnostic.id
+        message_prefix = f"{diagnostic_code}: VASP runtime log matched '{line_text}'."
+        # When the aggregated rule owns the diagnostic, surface the rule's
+        # category (``preflight/runtime-risk``) so OpenQC and downstream
+        # agents see the same category that ships in ``rules/diagnostics.yaml``.
+        # The runtime pattern's category is preserved on ``data.pattern_category``.
+        from ..rules import RULES_MANIFEST
+
+        if aggregated_rule_id and aggregated_rule_id in RULES_MANIFEST:
+            rule = RULES_MANIFEST[aggregated_rule_id]
+            exposed_category = rule["category"]
+            exposed_confidence = rule["confidence"]
+            pattern_category = runtime_diagnostic.category
+        else:
+            rule = None
+            exposed_category = runtime_diagnostic.category
+            exposed_confidence = runtime_diagnostic.confidence
+            pattern_category = runtime_diagnostic.category
+        data: Dict[str, Any] = {
+            "confidence": exposed_confidence,
+            "category": exposed_category,
+            "pattern_category": pattern_category,
+            "pattern_confidence": runtime_diagnostic.confidence,
+            "related_files": list(runtime_diagnostic.related_files),
+            "suggested_actions": [
+                {
+                    "title": action.title,
+                    "safe_to_auto_apply": action.safe_to_auto_apply,
+                    "target_file": action.target_file,
+                }
+                for action in runtime_diagnostic.suggested_actions
+            ],
+            "safe_to_auto_apply": all(
+                action.safe_to_auto_apply for action in runtime_diagnostic.suggested_actions
+            ),
+            "pattern_id": runtime_diagnostic.id,
+        }
+        # Surface the aggregated rule's manual_ref and fix_hint when applicable
+        # so the rich JSON contract carries consistent repair metadata.
+        if rule is not None:
+            manual_ref = rule.get("manual_ref")
+            if manual_ref:
+                data["manual_ref"] = manual_ref
+            fix_hint = rule.get("fix_hint")
+            if fix_hint:
+                data["fix_hints"] = [fix_hint]
         return Diagnostic(
             range=Range(
                 start=Position(line=runtime_diagnostic.line_index, character=0),
                 end=Position(line=runtime_diagnostic.line_index, character=end_character),
             ),
-            message=(
-                f"{runtime_diagnostic.id}: VASP runtime log matched '{line_text}'."
-                f"{action_suffix}"
-            ),
+            message=f"{message_prefix}{action_suffix}",
             severity=self._runtime_severity_to_lsp(runtime_diagnostic.severity),
             source="vasp-lsp-runtime",
-            code=runtime_diagnostic.id,
-            data={
-                "confidence": runtime_diagnostic.confidence,
-                "category": runtime_diagnostic.category,
-                "related_files": list(runtime_diagnostic.related_files),
-                "suggested_actions": [
-                    {
-                        "title": action.title,
-                        "safe_to_auto_apply": action.safe_to_auto_apply,
-                        "target_file": action.target_file,
-                    }
-                    for action in runtime_diagnostic.suggested_actions
-                ],
-                "safe_to_auto_apply": all(
-                    action.safe_to_auto_apply for action in runtime_diagnostic.suggested_actions
-                ),
-            },
+            code=diagnostic_code,
+            data=data,
         )
 
     def _runtime_severity_to_lsp(self, severity: str) -> DiagnosticSeverity:

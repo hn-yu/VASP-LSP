@@ -1,0 +1,12 @@
+ running on   16 total cores
+ distrk:  each k-point on   16 cores,    1 groups
+ distri:  each band on   16 cores,    1 groups
+ POSCAR found :
+ ERROR: an invariant subgroup was not found
+
+ INVGRP: inverse of rotation matrix was not found
+
+ ----------------------------------------------------------------------
+
+ ->    To avoid this problem, try to use a larger SYMPREC tag
+ ----------------------------------------------------------------------

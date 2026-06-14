@@ -6,7 +6,7 @@ A Language Server Protocol (LSP) implementation for VASP (Vienna Ab initio Simul
 
 VASP-LSP provides intelligent code editing features for VASP calculation input files:
 - **INCAR** - Input parameters with autocomplete and validation
-- **POSCAR** - Structure file syntax highlighting  
+- **POSCAR** - Structure file syntax highlighting
 - **KPOINTS** - K-point grid configuration
 
 ## Features
@@ -84,6 +84,62 @@ Automatic fixes for common issues:
 - Remove conflicting NPAR/NCORE
 - Fix common tag typos
 
+## Diagnostic Rule Catalog (OpenQC / Diagnostic Engine v1)
+
+VASP-LSP ships first-class diagnostic rules under stable `rule_id` codes. The
+catalog is published as `rules/diagnostics.yaml` and can be consumed by OpenQC
+and other tooling without importing the Python package.
+
+| Rule ID | Severity | Category | Source | Summary |
+| --- | --- | --- | --- | --- |
+| `vasp.incar.invalid_tag` | error | schema | official | Unknown INCAR tag (typo or stale name). |
+| `vasp.incar.invalid_value` | error | schema | official | INCAR value does not match the tag's declared type. |
+| `vasp.spin.missing_magmom` | warning | semantic consistency | official | `ISPIN=2` without an explicit `MAGMOM`. |
+| `vasp.smearing.ismear_sigma_mismatch` | warning | semantic consistency | official | Inconsistent `ISMEAR`/`SIGMA` pair. |
+| `vasp.encut.below_enmax` | warning | cross-file reference | official | `ENCUT` below the largest POTCAR `ENMAX`. |
+| `vasp.parallel.ncore_npar_conflict` | warning | preflight/runtime-risk | official | Both `NCORE` and `NPAR` declared. |
+| `vasp.parallel.kpar_incompatible` | warning | semantic consistency | official | `KPAR` combined with band-level `NCORE`/`NPAR`. |
+| `vasp.restart.file_mismatch` | warning | cross-file reference | official | Restart intent without the matching `WAVECAR`/`CHGCAR`. |
+| `vasp.log.symmetry_failure` | error | preflight/runtime-risk | runtime | VASP log symmetry-analysis failure (`INVGRP`/`PRICEL`/`SGRCON`/`SGRGEN`). |
+| `vasp.log.electronic_minimization_failed` | error | preflight/runtime-risk | runtime | VASP log electronic-minimization failure (`EDDDAV`/`EDDRMM`/`PSSYEVX`/`ZPOTRF`). |
+
+Run `vasp-lsp-tool rules` to export the catalog as JSON. Add `--fail-on-blocking`
+to `vasp-lsp-check` for non-zero exit on blocking diagnostics.
+
+## Agent JSON API (Diagnostic Engine v1)
+
+VASP-LSP ships a documented agent CLI surface for Claude Code, OpenCode, and
+Codex workflows:
+
+```bash
+# Live diagnostics for a calculation directory.
+vasp-lsp-check path/to/calc --format json --fail-on-blocking
+
+# Parse VASP runtime logs (OUTCAR/stdout/stderr/slurm*.out) into diagnostics.
+vasp-lsp-explain path/to/run.out --format json
+
+# Inspect the rule catalog or a single rule.
+vasp-lsp-tool rules
+vasp-lsp-tool rules vasp.encut.below_enmax
+vasp-lsp-tool explain vasp.log.symmetry_failure
+
+# DSL overview, keyword schema, minimal examples, and next-token guidance.
+vasp-lsp-describe
+vasp-lsp-schema ENCUT
+vasp-lsp-examples static
+vasp-lsp-tool next-tokens ISMEAR
+
+# Single-file agent queries (context, complete, hover, symbols, fix).
+vasp-lsp-tool check path/to/INCAR
+vasp-lsp-tool context path/to/INCAR --line 5
+vasp-lsp-tool hover path/to/INCAR --line 0 --character 2
+vasp-lsp-tool symbols path/to/INCAR
+vasp-lsp-tool fix path/to/INCAR
+```
+
+Every payload includes a `capabilities` block listing the available operations,
+so callers can probe support without parsing free text.
+
 ## Development
 
 ```bash
@@ -107,10 +163,10 @@ Coverage thresholds are enforced in CI (see `.github/workflows/ci.yml`).
 ## Code Quality
 
 The project maintains high code quality through:
-- **100% test coverage** - All code paths are tested
-- **Code cleanup** - Dead code and unreachable branches removed
-- **Static analysis** - Linting with Ruff
-- **Type hints** - Full type annotations for better IDE support
+- **95%+ enforced coverage** - All new code paths are tested; the threshold is enforced in CI.
+- **Code cleanup** - Dead code and unreachable branches removed.
+- **Static analysis** - Linting with Ruff, formatting with Black, type checking with mypy.
+- **Type hints** - Full type annotations for better IDE support.
 
 ## License
 

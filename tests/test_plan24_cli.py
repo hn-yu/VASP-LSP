@@ -36,7 +36,9 @@ def test_vasp_lsp_explain_log_json_and_guarded_actions(tmp_path, capsys) -> None
     assert payload["operation"] == "explain"
     assert payload["ok"] is False
     diagnostic = payload["diagnostics"][0]
-    assert diagnostic["id"] == "vasp.runtime.edddav_zhegv"
+    # Electronic-minimization runtime patterns roll up to the aggregated
+    # rule id vasp.log.electronic_minimization_failed (#59).
+    assert diagnostic["id"] == "vasp.log.electronic_minimization_failed"
     assert diagnostic["source_file"].endswith("slurm-123.out")
     assert "INCAR" in diagnostic["related_files"]
     assert any(

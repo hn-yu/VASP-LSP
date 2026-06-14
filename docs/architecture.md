@@ -4,7 +4,7 @@
 
 VASP-LSP is a Language Server Protocol (LSP) implementation for VASP input files. It provides intelligent code editing features for:
 - INCAR - Input parameters
-- POSCAR - Structure files  
+- POSCAR - Structure files
 - KPOINTS - K-point grids
 
 ## Architecture Diagram

@@ -99,6 +99,28 @@
       "summary": "Reports INCAR files whose restart settings imply reading a restart file that is not present in the calculation directory. ISTART >= 1 reads plane-wave coefficients from a pre-existing WAVECAR, and ICHARG in {1, 11} reads a precomputed charge density from CHGCAR; both require a compatible restart file matching the current run's ENCUT, NBANDS, FFT mesh, and parallelization layout. A restart-implying setting combined with a missing restart file is incompatible with the available evidence and almost always indicates a forgotten restart artifact or a stale restart workflow.",
       "manual_ref": "https://www.vasp.at/wiki/index.php/ISTART",
       "fix_hint": "Provide a compatible restart file alongside the INCAR, or switch to a from-scratch start: set ISTART = 0 if no WAVECAR is intended (see https://www.vasp.at/wiki/index.php/ISTART), or set ICHARG = 0 / 2 to compute the charge density internally (see https://www.vasp.at/wiki/index.php/ICHARG)."
+    },
+    {
+      "rule_id": "vasp.log.symmetry_failure",
+      "software": "vasp",
+      "severity": "error",
+      "category": "preflight/runtime-risk",
+      "confidence": 0.9,
+      "source": "runtime",
+      "summary": "Reports a VASP runtime log line that records a symmetry-analysis failure (INVGRP/PRICEL/SGRCON/SGRGEN families). VASP aborts the run when these patterns fire, so any matching log entry should block automated resubmission until ISYM/SYMPREC or the POSCAR is corrected.",
+      "manual_ref": "https://www.vasp.at/wiki/index.php/ISYM",
+      "fix_hint": "Set ISYM=0 to disable symmetry analysis, tighten SYMPREC (e.g. 1E-6), or correct the POSCAR lattice/sites (see https://www.vasp.at/wiki/index.php/ISYM)."
+    },
+    {
+      "rule_id": "vasp.log.electronic_minimization_failed",
+      "software": "vasp",
+      "severity": "error",
+      "category": "preflight/runtime-risk",
+      "confidence": 0.88,
+      "source": "runtime",
+      "summary": "Reports a VASP runtime log line that records an electronic-minimization failure (EDDDAV/ZHEGV, EDDRMM/ZHEGV, PSSYEVX, ZPOTRF families). VASP aborts the SCF cycle when these patterns fire, so any matching log entry should block automated resubmission until ALGO/POTIM or the charge-density restart is corrected.",
+      "manual_ref": "https://www.vasp.at/wiki/index.php/ALGO",
+      "fix_hint": "Switch to ALGO=Normal, lower POTIM for geometry optimizations, or remove a stale WAVECAR/CHGCAR before retrying (see https://www.vasp.at/wiki/index.php/ALGO)."
     }
   ]
 }

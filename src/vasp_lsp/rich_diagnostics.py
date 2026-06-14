@@ -172,7 +172,7 @@ def diagnostic_to_dict(
         suggested_fix = legacy.get("suggested_fix")
         fix_hints = [] if suggested_fix is None else [suggested_fix]
     blocking = bool(_pick("blocking", severity == "error" and confidence >= 0.8))
-    return {
+    payload: dict[str, Any] = {
         "diagnostic_engine": DIAGNOSTIC_ENGINE_VERSION,
         "code": str(code or "diagnostic"),
         "severity": severity,
@@ -190,6 +190,21 @@ def diagnostic_to_dict(
         "blocking": blocking,
         "message": str(message or ""),
     }
+    # Surface optional runtime-log traceability fields when present so agents
+    # can read both the aggregated rule id and the specific runtime pattern
+    # that triggered it (e.g. ``code`` = ``vasp.log.symmetry_failure`` and
+    # ``pattern_id`` = ``vasp.runtime.invgrp_symmetry``).
+    for optional_key in (
+        "pattern_id",
+        "pattern_category",
+        "pattern_confidence",
+        "related_files",
+        "suggested_actions",
+        "safe_to_auto_apply",
+    ):
+        if optional_key in data:
+            payload[optional_key] = data[optional_key]
+    return payload
 
 
 def serialize_diagnostics(

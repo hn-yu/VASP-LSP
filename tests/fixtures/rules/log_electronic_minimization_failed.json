@@ -1,0 +1,15 @@
+{
+  "rule_id": "vasp.log.electronic_minimization_failed",
+  "software": "vasp",
+  "file_type": "VASP_LOG",
+  "severity": "error",
+  "category": "preflight/runtime-risk",
+  "confidence": 0.88,
+  "source": "vasp-lsp-runtime",
+  "manual_ref": "https://www.vasp.at/wiki/index.php/ALGO",
+  "invalid_fixture": "tests/fixtures/logs/electronic_minimization_failed.out",
+  "valid_fixture": "tests/fixtures/logs/electronic_minimization_failed_valid.out",
+  "message_contains": "EDDDAV",
+  "fix_hints_contains": "ALGO=Normal",
+  "blocking": true
+}

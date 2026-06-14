@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from . import dsl_description
 from .agent_operations import operation_path, with_capabilities
 from .rich_diagnostics import agent_check_payload, diagnostic_to_dict
 
@@ -275,18 +276,94 @@ def explain_main(argv: list[str] | None = None) -> int:
     return 1 if args.fail_on_blocking and not payload["ok"] else 0
 
 
+def describe_main(argv: list[str] | None = None) -> int:
+    """Console entry for ``vasp-lsp-describe``: print the DSL overview JSON (#29)."""
+    parser = argparse.ArgumentParser(prog="vasp-lsp-describe")
+    parser.add_argument("--format", choices=["json"], default="json")
+    parser.parse_args(argv)
+    payload = with_capabilities(dsl_description.describe_language(), "describe")
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0
+
+
+def schema_main(argv: list[str] | None = None) -> int:
+    """Console entry for ``vasp-lsp-schema``: print the keyword schema JSON (#30)."""
+    parser = argparse.ArgumentParser(prog="vasp-lsp-schema")
+    parser.add_argument("keyword", help="INCAR keyword to look up (e.g. ENCUT).")
+    parser.add_argument("--format", choices=["json"], default="json")
+    args = parser.parse_args(argv)
+    payload = with_capabilities(dsl_description.describe_keyword(args.keyword), "schema")
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0
+
+
+def examples_main(argv: list[str] | None = None) -> int:
+    """Console entry for ``vasp-lsp-examples``: print minimal example JSON (#31)."""
+    parser = argparse.ArgumentParser(prog="vasp-lsp-examples")
+    parser.add_argument(
+        "calculation_type",
+        nargs="?",
+        default="static",
+        help="Calculation pattern (e.g. static, relaxation, spin_polarized).",
+    )
+    parser.add_argument("--format", choices=["json"], default="json")
+    args = parser.parse_args(argv)
+    payload = with_capabilities(
+        dsl_description.make_minimal_example(args.calculation_type), "examples"
+    )
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="vasp-lsp-tool")
     subparsers = parser.add_subparsers(dest="operation", required=True)
-    for operation in ("check", "context", "complete", "hover", "symbols", "fix", "rules"):
+    for operation in (
+        "check",
+        "context",
+        "complete",
+        "hover",
+        "symbols",
+        "fix",
+        "rules",
+        "describe",
+        "schema",
+        "section",
+        "examples",
+        "next-tokens",
+        "explain",
+    ):
         sub = subparsers.add_parser(operation)
-        # ``rules`` is a catalog export and takes no file path.
+        # Catalog-only operations take no file path.
         if operation == "rules":
             sub.add_argument(
                 "rule_id",
                 nargs="?",
                 help="Optional rule_id to explain (e.g. vasp.incar.invalid_tag).",
             )
+        elif operation == "describe":
+            # ``describe`` takes no arguments (language overview).
+            pass
+        elif operation == "schema":
+            sub.add_argument("keyword", help="INCAR keyword to look up.")
+        elif operation == "section":
+            sub.add_argument("section", help="VASP section/file type to look up.")
+        elif operation == "examples":
+            sub.add_argument(
+                "calculation_type",
+                nargs="?",
+                default="static",
+                help="Calculation pattern (e.g. static, relaxation, spin_polarized).",
+            )
+        elif operation == "next-tokens":
+            sub.add_argument(
+                "context",
+                nargs="?",
+                default="",
+                help="Cursor context (the last meaningful token on the line).",
+            )
+        elif operation == "explain":
+            sub.add_argument("rule_id", help="Rule id to explain.")
         else:
             sub.add_argument("path", type=Path)
         sub.add_argument("--format", choices=["json"], default="json")
@@ -311,6 +388,34 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if getattr(args, "fail_on_blocking", False) and not payload["ok"] else 0
     if args.operation == "rules":
         payload = rules_payload(getattr(args, "rule_id", None))
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
+    if args.operation == "describe":
+        payload = with_capabilities(dsl_description.describe_language(), "describe")
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
+    if args.operation == "schema":
+        payload = with_capabilities(dsl_description.describe_keyword(args.keyword), "schema")
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
+    if args.operation == "section":
+        payload = with_capabilities(dsl_description.describe_section(args.section), "section")
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
+    if args.operation == "examples":
+        payload = with_capabilities(
+            dsl_description.make_minimal_example(args.calculation_type), "examples"
+        )
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
+    if args.operation == "next-tokens":
+        payload = with_capabilities(
+            dsl_description.suggest_next_tokens(args.context), "next-tokens"
+        )
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
+    if args.operation == "explain":
+        payload = with_capabilities(dsl_description.rule_explain(args.rule_id), "explain")
         print(json.dumps(payload, indent=2, sort_keys=True))
         return 0
     payload = _operation_payload(args.path, args.operation, args.line, args.character)

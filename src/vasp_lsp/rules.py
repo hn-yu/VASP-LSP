@@ -294,6 +294,68 @@ RESTART_FILE_MISMATCH = _rule(
     ),
 )
 
+#: vasp.log.symmetry_failure — error on a VASP runtime log that records a
+#: symmetry analysis failure (INVGRP, PRICEL, SGRCON, SGRGEN families). VASP
+#: stops the run when these patterns fire, so the rule ships at ``error``
+#: severity with ``source=runtime`` per the OpenQC severity policy. Upstream
+#: reference: https://www.vasp.at/wiki/index.php/ISYM
+LOG_SYMMETRY_FAILURE = _rule(
+    rule_id="vasp.log.symmetry_failure",
+    severity="error",
+    category="preflight/runtime-risk",
+    confidence=0.9,
+    summary=(
+        "Reports a VASP runtime log line that records a symmetry-analysis "
+        "failure (INVGRP/PRICEL/SGRCON/SGRGEN families). VASP aborts the run "
+        "when these patterns fire, so any matching log entry should block "
+        "automated resubmission until ISYM/SYMPREC or the POSCAR is corrected."
+    ),
+    manual_ref="https://www.vasp.at/wiki/index.php/ISYM",
+    source="runtime",
+    fix_hint=(
+        "Set ISYM=0 to disable symmetry analysis, tighten SYMPREC (e.g. "
+        "1E-6), or correct the POSCAR lattice/sites "
+        "(see https://www.vasp.at/wiki/index.php/ISYM)."
+    ),
+)
+
+#: vasp.log.electronic_minimization_failed — error on a VASP runtime log that
+#: records an electronic-minimization failure (EDDDAV/ZHEGV, EDDRMM/ZHEGV,
+#: PSSYEVX, ZPOTRF families). VASP aborts the SCF cycle when these patterns
+#: fire, so the rule ships at ``error`` severity with ``source=runtime`` per
+#: the OpenQC severity policy. Upstream reference:
+#: https://www.vasp.at/wiki/index.php/ALGO
+LOG_ELECTRONIC_MINIMIZATION_FAILED = _rule(
+    rule_id="vasp.log.electronic_minimization_failed",
+    severity="error",
+    category="preflight/runtime-risk",
+    confidence=0.88,
+    summary=(
+        "Reports a VASP runtime log line that records an electronic-"
+        "minimization failure (EDDDAV/ZHEGV, EDDRMM/ZHEGV, PSSYEVX, ZPOTRF "
+        "families). VASP aborts the SCF cycle when these patterns fire, so "
+        "any matching log entry should block automated resubmission until "
+        "ALGO/POTIM or the charge-density restart is corrected."
+    ),
+    manual_ref="https://www.vasp.at/wiki/index.php/ALGO",
+    source="runtime",
+    fix_hint=(
+        "Switch to ALGO=Normal, lower POTIM for geometry optimizations, or "
+        "remove a stale WAVECAR/CHGCAR before retrying "
+        "(see https://www.vasp.at/wiki/index.php/ALGO)."
+    ),
+)
+
+#: Mapping from a VASP runtime log ``category`` (see
+#: :mod:`vasp_lsp.schemas.vasp_error_patterns`) to the first-class rule id
+#: that aggregates the category's runtime patterns. ``None`` means the
+#: category has no first-class rule yet and the runtime pattern id stays the
+#: diagnostic code.
+RUNTIME_CATEGORY_RULE_MAP: Dict[str, str] = {
+    "symmetry": LOG_SYMMETRY_FAILURE["rule_id"],
+    "electronic_minimization": LOG_ELECTRONIC_MINIMIZATION_FAILED["rule_id"],
+}
+
 #: Ordered registry of all first-class rules exported by VASP-LSP.
 RULES_MANIFEST: Dict[str, Dict[str, Any]] = {
     INVALID_INCAR_TAG["rule_id"]: INVALID_INCAR_TAG,
@@ -304,7 +366,14 @@ RULES_MANIFEST: Dict[str, Dict[str, Any]] = {
     PARALLEL_NCORE_NPAR_CONFLICT["rule_id"]: PARALLEL_NCORE_NPAR_CONFLICT,
     PARALLEL_KPAR_INCOMPATIBLE["rule_id"]: PARALLEL_KPAR_INCOMPATIBLE,
     RESTART_FILE_MISMATCH["rule_id"]: RESTART_FILE_MISMATCH,
+    LOG_SYMMETRY_FAILURE["rule_id"]: LOG_SYMMETRY_FAILURE,
+    LOG_ELECTRONIC_MINIMIZATION_FAILED["rule_id"]: LOG_ELECTRONIC_MINIMIZATION_FAILED,
 }
+
+
+def rule_id_for_runtime_category(category: str) -> Optional[str]:
+    """Return the rule id that aggregates a runtime log category, if any."""
+    return RUNTIME_CATEGORY_RULE_MAP.get(category)
 
 
 def get_rule(rule_id: str) -> Optional[Dict[str, Any]]:

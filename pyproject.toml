@@ -44,6 +44,9 @@ vasp-lsp = "vasp_lsp.server:main"
 vasp-lsp-tool = "vasp_lsp.tool:main"
 vasp-lsp-check = "vasp_lsp.tool:check_main"
 vasp-lsp-explain = "vasp_lsp.tool:explain_main"
+vasp-lsp-describe = "vasp_lsp.tool:describe_main"
+vasp-lsp-schema = "vasp_lsp.tool:schema_main"
+vasp-lsp-examples = "vasp_lsp.tool:examples_main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/vasp_lsp"]

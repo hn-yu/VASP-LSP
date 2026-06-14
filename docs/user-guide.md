@@ -41,6 +41,8 @@ require'lspconfig'.vasp_lsp.setup{}
 - **INCAR**: Main input file with 100+ supported parameters
 - **POSCAR**: Structure file with lattice and coordinates
 - **KPOINTS**: K-point grid specification
+- **POTCAR**: Pseudopotential metadata (parsed for ENMAX/ENMIN cross-file checks)
+- **VASP runtime logs**: OUTCAR / stdout / stderr / slurm captures (parsed for runtime diagnostics)
 
 ## Features
 
@@ -59,6 +61,7 @@ require'lspconfig'.vasp_lsp.setup{}
 - Invalid value errors
 - Missing required parameters
 - Parameter conflicts
+- First-class rule codes (see `rules/diagnostics.yaml`)
 
 ### Quick Fixes
 - Add missing SIGMA when ISMEAR >= 0
@@ -70,6 +73,17 @@ require'lspconfig'.vasp_lsp.setup{}
 - Group INCAR parameters by category
 - Align parameter values
 - Normalize coordinate precision
+
+### Rename / Navigation
+- LSP `textDocument/rename` for INCAR tags
+- LSP `textDocument/documentSymbol` for INCAR/POSCAR/KPOINTS
+- LSP `textDocument/hover`, `definition`, and `references` providers
+
+### Agent JSON API (Diagnostic Engine v1)
+- `vasp-lsp-check path/to/calc --format json --fail-on-blocking`
+- `vasp-lsp-explain path/to/run.out --format json`
+- `vasp-lsp-describe`, `vasp-lsp-schema ENCUT`, `vasp-lsp-examples static`
+- `vasp-lsp-tool rules` exports the rule catalog
 
 ## License
 
