@@ -14,33 +14,47 @@ from lsprotocol.types import (
     CodeActionContext,
     CodeActionParams,
     CompletionParams,
+    DefinitionParams,
     Diagnostic,
     DiagnosticSeverity,
     DidChangeTextDocumentParams,
     DidOpenTextDocumentParams,
     DidSaveTextDocumentParams,
     DocumentFormattingParams,
+    DocumentRangeFormattingParams,
+    DocumentSymbolParams,
     FormattingOptions,
     HoverParams,
     InitializeParams,
     Position,
+    PrepareRenameParams,
     Range,
+    ReferenceParams,
+    RenameParams,
     TextDocumentContentChangeEvent_Type2,
     TextDocumentIdentifier,
     TextDocumentItem,
     VersionedTextDocumentIdentifier,
+    WorkspaceSymbolParams,
 )
 
 from vasp_lsp.server import (
     VASPLanguageServer,
     code_action,
     completions,
+    definition,
+    document_symbol,
     formatting,
     hover,
     initialize,
+    prepare_rename,
+    range_formatting,
+    references,
+    rename,
     text_document_did_change,
     text_document_did_open,
     text_document_did_save,
+    workspace_symbol,
 )
 
 # ---------------------------------------------------------------------------
@@ -694,3 +708,240 @@ class TestEndToEndWorkflow:
         # Diagnostics after save should reflect the bad tag
         diags = server.published_diagnostics.get(INCAR_URI, [])
         assert any("Unknown INCAR tag" in d.message for d in diags)
+
+
+# ---------------------------------------------------------------------------
+# Helper factories for new handlers
+# ---------------------------------------------------------------------------
+
+
+def _make_range_formatting_params(
+    uri: str, start_line: int, end_line: int
+) -> DocumentRangeFormattingParams:
+    return DocumentRangeFormattingParams(
+        text_document=TextDocumentIdentifier(uri=uri),
+        range=Range(
+            start=Position(line=start_line, character=0),
+            end=Position(line=end_line, character=100),
+        ),
+        options=FormattingOptions(tab_size=4, insert_spaces=True),
+    )
+
+
+def _make_definition_params(uri: str, line: int, character: int) -> DefinitionParams:
+    return DefinitionParams(
+        text_document=TextDocumentIdentifier(uri=uri),
+        position=Position(line=line, character=character),
+    )
+
+
+def _make_references_params(uri: str, line: int, character: int) -> ReferenceParams:
+    from lsprotocol.types import ReferenceContext
+
+    return ReferenceParams(
+        text_document=TextDocumentIdentifier(uri=uri),
+        position=Position(line=line, character=character),
+        context=ReferenceContext(include_declaration=True),
+    )
+
+
+def _make_prepare_rename_params(uri: str, line: int, character: int) -> PrepareRenameParams:
+    return PrepareRenameParams(
+        text_document=TextDocumentIdentifier(uri=uri),
+        position=Position(line=line, character=character),
+    )
+
+
+def _make_rename_params(uri: str, line: int, character: int, new_name: str) -> RenameParams:
+    return RenameParams(
+        text_document=TextDocumentIdentifier(uri=uri),
+        position=Position(line=line, character=character),
+        new_name=new_name,
+    )
+
+
+def _make_workspace_symbol_params(query: str) -> WorkspaceSymbolParams:
+    return WorkspaceSymbolParams(query=query)
+
+
+def _make_document_symbol_params(uri: str) -> DocumentSymbolParams:
+    return DocumentSymbolParams(text_document=TextDocumentIdentifier(uri=uri))
+
+
+# ===========================================================================
+# Range formatting handler tests
+# ===========================================================================
+
+
+@pytest.mark.integration
+class TestRangeFormattingHandler:
+    """Integration tests for the range formatting handler."""
+
+    def test_range_format_returns_edits(self, server: _CaptureServer) -> None:
+        """Range formatting returns edits for INCAR files."""
+        text_document_did_open(_make_did_open(INCAR_URI, "encut = 400\nismear = 0"))
+        params = _make_range_formatting_params(INCAR_URI, 0, 0)
+        result = range_formatting(params)
+        assert result is not None
+        assert len(result) == 1
+
+    def test_range_format_returns_none_for_missing_doc(self, server: _CaptureServer) -> None:
+        """Range formatting returns None for uncached documents."""
+        params = _make_range_formatting_params("file:///missing", 0, 0)
+        result = range_formatting(params)
+        assert result is None
+
+
+# ===========================================================================
+# Definition handler tests
+# ===========================================================================
+
+
+@pytest.mark.integration
+class TestDefinitionHandler:
+    """Integration tests for the definition handler."""
+
+    def test_definition_returns_location(self, server: _CaptureServer) -> None:
+        """Definition returns a Location for an INCAR tag."""
+        text_document_did_open(_make_did_open(INCAR_URI, "ENCUT = 400\nISMEAR = 0"))
+        params = _make_definition_params(INCAR_URI, 0, 1)
+        result = definition(params)
+        assert result is not None
+        assert result.range.start.line == 0
+
+    def test_definition_returns_none_for_missing_doc(self, server: _CaptureServer) -> None:
+        """Definition returns None for uncached documents."""
+        params = _make_definition_params("file:///missing", 0, 0)
+        result = definition(params)
+        assert result is None
+
+
+# ===========================================================================
+# References handler tests
+# ===========================================================================
+
+
+@pytest.mark.integration
+class TestReferencesHandler:
+    """Integration tests for the references handler."""
+
+    def test_references_returns_all(self, server: _CaptureServer) -> None:
+        """References returns all occurrences of an INCAR tag."""
+        text_document_did_open(_make_did_open(INCAR_URI, "ENCUT = 400\nISMEAR = 0\nENCUT = 500"))
+        params = _make_references_params(INCAR_URI, 0, 1)
+        result = references(params)
+        assert result is not None
+        assert len(result) == 2
+
+    def test_references_returns_empty_for_missing_doc(self, server: _CaptureServer) -> None:
+        """References returns empty list for uncached documents."""
+        params = _make_references_params("file:///missing", 0, 0)
+        result = references(params)
+        assert result == []
+
+
+# ===========================================================================
+# Workspace symbol handler tests
+# ===========================================================================
+
+
+@pytest.mark.integration
+class TestWorkspaceSymbolHandler:
+    """Integration tests for the workspace symbol handler."""
+
+    def test_workspace_symbol_returns_incar_tags(self, server: _CaptureServer) -> None:
+        """Workspace symbol returns INCAR tags from open documents."""
+        text_document_did_open(_make_did_open(INCAR_URI, "ENCUT = 400\nISMEAR = 0\nSIGMA = 0.2"))
+        params = _make_workspace_symbol_params("ENC")
+        result = workspace_symbol(params)
+        assert result is not None
+        assert any(s.name == "ENCUT" for s in result)
+
+    def test_workspace_symbol_empty_query(self, server: _CaptureServer) -> None:
+        """Workspace symbol with empty query returns all symbols."""
+        text_document_did_open(_make_did_open(INCAR_URI, "ENCUT = 400\nISMEAR = 0"))
+        params = _make_workspace_symbol_params("")
+        result = workspace_symbol(params)
+        assert result is not None
+        assert len(result) >= 2
+
+
+# ===========================================================================
+# Document symbol handler tests
+# ===========================================================================
+
+
+@pytest.mark.integration
+class TestDocumentSymbolHandler:
+    """Integration tests for the document symbol handler."""
+
+    def test_document_symbol_returns_incar_tags(self, server: _CaptureServer) -> None:
+        """Document symbol returns INCAR tags."""
+        text_document_did_open(_make_did_open(INCAR_URI, "ENCUT = 400\nISMEAR = 0"))
+        params = _make_document_symbol_params(INCAR_URI)
+        result = document_symbol(params)
+        assert result is not None
+        assert len(result) == 2
+
+    def test_document_symbol_returns_empty_for_missing(self, server: _CaptureServer) -> None:
+        """Document symbol returns empty list for uncached documents."""
+        params = _make_document_symbol_params("file:///missing")
+        result = document_symbol(params)
+        assert result == []
+
+
+# ===========================================================================
+# Prepare rename handler tests
+# ===========================================================================
+
+
+@pytest.mark.integration
+class TestPrepareRenameHandler:
+    """Integration tests for the prepare rename handler."""
+
+    def test_prepare_rename_returns_range(self, server: _CaptureServer) -> None:
+        """Prepare rename returns a range for an INCAR tag."""
+        text_document_did_open(_make_did_open(INCAR_URI, "ENCUT = 400"))
+        params = _make_prepare_rename_params(INCAR_URI, 0, 1)
+        result = prepare_rename(params)
+        assert result is not None
+        assert result.start.line == 0
+
+    def test_prepare_rename_returns_none_for_missing(self, server: _CaptureServer) -> None:
+        """Prepare rename returns None for uncached documents."""
+        params = _make_prepare_rename_params("file:///missing", 0, 0)
+        result = prepare_rename(params)
+        assert result is None
+
+
+# ===========================================================================
+# Rename handler tests
+# ===========================================================================
+
+
+@pytest.mark.integration
+class TestRenameHandler:
+    """Integration tests for the rename handler."""
+
+    def test_rename_returns_workspace_edit(self, server: _CaptureServer) -> None:
+        """Rename returns a workspace edit for an INCAR tag."""
+        text_document_did_open(_make_did_open(INCAR_URI, "ENCUT = 400\nISMEAR = 0\nENCUT = 500"))
+        params = _make_rename_params(INCAR_URI, 0, 1, "CUTOFF")
+        result = rename(params)
+        assert result is not None
+        assert result.changes is not None
+        assert INCAR_URI in result.changes
+        assert len(result.changes[INCAR_URI]) == 2
+
+    def test_rename_returns_none_for_missing(self, server: _CaptureServer) -> None:
+        """Rename returns None for uncached documents."""
+        params = _make_rename_params("file:///missing", 0, 0, "NEW")
+        result = rename(params)
+        assert result is None
+
+    def test_rename_returns_none_for_non_inc(self, server: _CaptureServer) -> None:
+        """Rename returns None for non-INCAR files."""
+        text_document_did_open(_make_did_open(POSCAR_URI, "Si\n1.0"))
+        params = _make_rename_params(POSCAR_URI, 0, 0, "NEW")
+        result = rename(params)
+        assert result is None

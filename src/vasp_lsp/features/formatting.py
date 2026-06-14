@@ -3,11 +3,14 @@
 Provides document formatting capabilities for VASP input files.
 """
 
+import re
 from typing import List, Optional
 
 from lsprotocol.types import Position, Range, TextEdit
 
 from ..parsers.incar_parser import INCARParser
+
+_INCAR_ASSIGNMENT_RE = re.compile(r"^(\s*)([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$")
 
 
 class FormattingProvider:
@@ -40,6 +43,47 @@ class FormattingProvider:
             return self._format_kpoints(document_content)
 
         return []
+
+    def format_range(
+        self,
+        document_content: str,
+        document_uri: str,
+        range_obj: Range,
+        options: Optional[dict] = None,
+    ) -> List[TextEdit]:
+        """Format only the requested range when it can be done safely."""
+        if self._get_file_type(document_uri) != "INCAR":
+            return []
+
+        lines = document_content.split("\n")
+        if not lines:
+            return []
+
+        start_line = max(range_obj.start.line, 0)
+        end_line = min(range_obj.end.line, len(lines) - 1)
+        if start_line > end_line:
+            return []
+
+        edits: List[TextEdit] = []
+        for line_idx in range(start_line, end_line + 1):
+            line = lines[line_idx]
+            match = _INCAR_ASSIGNMENT_RE.match(line)
+            if not match:
+                continue
+            indent, name, value = match.groups()
+            value = re.sub(r"[#!].*$", "", value).strip()
+            new_line = f"{indent}{name.upper()} = {value}"
+            if new_line != line:
+                edits.append(
+                    TextEdit(
+                        range=Range(
+                            start=Position(line=line_idx, character=0),
+                            end=Position(line=line_idx, character=len(line)),
+                        ),
+                        new_text=new_line,
+                    )
+                )
+        return edits
 
     def _get_file_type(self, uri: str) -> str:
         """Determine file type from URI."""

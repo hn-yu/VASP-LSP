@@ -5,14 +5,17 @@ breadcrumb navigation, go-to-symbol) in LSP editors.
 """
 
 import re
-from typing import List
+from typing import List, Optional, Tuple
 
 from lsprotocol.types import (
     DocumentSymbol,
+    Location,
     Position,
     Range,
     SymbolKind,
 )
+
+_INCAR_TAG_RE = re.compile(r"^\s*(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=")
 
 
 class DocumentSymbolsProvider:
@@ -394,6 +397,96 @@ class DocumentSymbolsProvider:
                 )
 
         return symbols
+
+    def find_incar_tag_at_position(self, content: str, position: Position) -> Optional[str]:
+        """Return the INCAR tag name at ``position``, if any."""
+        lines = content.split("\n")
+        if position.line >= len(lines):
+            return None
+        match = _INCAR_TAG_RE.match(lines[position.line])
+        if not match:
+            return None
+        start = match.start("name")
+        end = match.end("name")
+        if position.character < start or position.character > end:
+            return None
+        return match.group("name").upper()
+
+    def find_incar_tag_occurrences(self, content: str) -> List[Tuple[str, int, int, int]]:
+        """Return ``(tag, line, start, end)`` tuples for INCAR assignments."""
+        occurrences: List[Tuple[str, int, int, int]] = []
+        for line_idx, line in enumerate(content.split("\n")):
+            match = _INCAR_TAG_RE.match(line)
+            if match:
+                occurrences.append(
+                    (
+                        match.group("name").upper(),
+                        line_idx,
+                        match.start("name"),
+                        match.end("name"),
+                    )
+                )
+        return occurrences
+
+    def get_definition(
+        self, content: str, document_uri: str, position: Position
+    ) -> Optional[Location]:
+        """Go to the first definition of an INCAR tag."""
+        if self._get_file_type(document_uri) != "INCAR":
+            return None
+        tag = self.find_incar_tag_at_position(content, position)
+        if tag is None:
+            return None
+        for name, line_idx, start, end in self.find_incar_tag_occurrences(content):
+            if name == tag:
+                return Location(
+                    uri=document_uri,
+                    range=Range(
+                        start=Position(line=line_idx, character=start),
+                        end=Position(line=line_idx, character=end),
+                    ),
+                )
+        return None
+
+    def get_references(self, content: str, document_uri: str, position: Position) -> List[Location]:
+        """Find all references to an INCAR tag in the current document."""
+        if self._get_file_type(document_uri) != "INCAR":
+            return []
+        tag = self.find_incar_tag_at_position(content, position)
+        if tag is None:
+            return []
+        return [
+            Location(
+                uri=document_uri,
+                range=Range(
+                    start=Position(line=line_idx, character=start),
+                    end=Position(line=line_idx, character=end),
+                ),
+            )
+            for name, line_idx, start, end in self.find_incar_tag_occurrences(content)
+            if name == tag
+        ]
+
+    def prepare_rename(
+        self, content: str, document_uri: str, position: Position
+    ) -> Optional[Range]:
+        """Return the renameable range for an INCAR tag, if supported."""
+        if self._get_file_type(document_uri) != "INCAR":
+            return None
+        lines = content.split("\n")
+        if position.line >= len(lines):
+            return None
+        match = _INCAR_TAG_RE.match(lines[position.line])
+        if not match:
+            return None
+        start = match.start("name")
+        end = match.end("name")
+        if position.character < start or position.character > end:
+            return None
+        return Range(
+            start=Position(line=position.line, character=start),
+            end=Position(line=position.line, character=end),
+        )
 
 
 # Module-level convenience function
