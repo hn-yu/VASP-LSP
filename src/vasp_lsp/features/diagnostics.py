@@ -14,7 +14,7 @@ from ..parsers.kpoints_parser import KPOINTSMode, KPOINTSParser
 from ..parsers.poscar_parser import POSCARParser
 from ..parsers.potcar_parser import POTCARParser
 from ..parsers.vasp_log_parser import VASPLogDiagnostic, VASPLogParser
-from ..rules import INVALID_INCAR_TAG, get_rule_fix_hint
+from ..rules import INVALID_INCAR_TAG, INVALID_INCAR_VALUE, get_rule_fix_hint
 from ..schemas.incar_tags import CALCULATION_MODES, CalculationMode, get_tag_info
 
 
@@ -473,14 +473,56 @@ class DiagnosticsProvider:
         return diagnostics
 
     def _value_type_diagnostic(self, param, message: str) -> Diagnostic:
+        return self._invalid_incar_value_diagnostic(param, message)
+
+    def _value_token_range(self, param) -> Range:
+        """Compute a range that underlines just the value token.
+
+        The parser stores ``column_start`` at the tag name and ``column_end``
+        at the end of the parsed value group, which spans the whole
+        ``name = value`` assignment. For the vasp.incar.invalid_value rule we
+        want a precise squiggle over the offending value, so we re-locate the
+        value token from ``raw_line`` and fall back to the assignment range.
+        """
+        line_index = param.line_number - 1
+        raw_line = getattr(param, "raw_line", "") or ""
+        equals = raw_line.find("=")
+        if equals == -1:
+            return Range(
+                start=Position(line=line_index, character=param.column_start),
+                end=Position(line=line_index, character=param.column_end),
+            )
+        value_start = equals + 1
+        # Skip whitespace between '=' and the value token.
+        while value_start < len(raw_line) and raw_line[value_start].isspace():
+            value_start += 1
+        value_end = max(value_start + 1, param.column_end)
+        return Range(
+            start=Position(line=line_index, character=value_start),
+            end=Position(line=line_index, character=value_end),
+        )
+
+    def _invalid_incar_value_diagnostic(self, param, message: str) -> Diagnostic:
+        """Build the vasp.incar.invalid_value diagnostic for a wrong-type value.
+
+        The range underlines just the value token so editors can render a
+        precise squiggle on the offending value. Rule metadata (category,
+        confidence, manual_ref, fix_hint) travels on ``Diagnostic.data`` so
+        the agent-facing rich JSON contract surfaces it.
+        """
+        fix_hint = get_rule_fix_hint(INVALID_INCAR_VALUE["rule_id"])
         return Diagnostic(
-            range=Range(
-                start=Position(line=param.line_number - 1, character=param.column_start),
-                end=Position(line=param.line_number - 1, character=param.column_end),
-            ),
+            range=self._value_token_range(param),
             message=message,
             severity=DiagnosticSeverity.Error,
             source="vasp-lsp",
+            code=INVALID_INCAR_VALUE["rule_id"],
+            data={
+                "category": INVALID_INCAR_VALUE["category"],
+                "confidence": INVALID_INCAR_VALUE["confidence"],
+                "manual_ref": INVALID_INCAR_VALUE["manual_ref"],
+                "fix_hints": [fix_hint] if fix_hint else [],
+            },
         )
 
     def _check_incar_dependencies(self, parser: INCARParser) -> List[Diagnostic]:

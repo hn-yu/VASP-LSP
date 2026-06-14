@@ -1,0 +1,6 @@
+# Invalid INCAR fixture for vasp.incar.invalid_value
+# ENCUT is an upstream float tag
+# (https://www.vasp.at/wiki/index.php/ENCUT). Assigning a non-numeric
+# string is a wrong-type value and must surface vasp.incar.invalid_value
+# at error severity, underlining the offending value.
+ENCUT = abc

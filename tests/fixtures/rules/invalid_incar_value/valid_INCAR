@@ -1,0 +1,13 @@
+# Valid INCAR fixture: every tag below is part of the upstream
+# INCAR schema (https://www.vasp.at/wiki/index.php/INCAR) and every
+# value matches its declared type, so this file must NOT emit
+# vasp.incar.invalid_value.
+
+SYSTEM = valid-value-fixture
+ENCUT = 520
+ISMEAR = 0
+SIGMA = 0.05
+EDIFF = 1E-6
+ALGO = Normal
+NSW = 100
+LWAVE = .FALSE.

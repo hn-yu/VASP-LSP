@@ -1,0 +1,25 @@
+{
+  "rule_id": "vasp.incar.invalid_value",
+  "software": "vasp",
+  "file_type": "INCAR",
+  "severity": "error",
+  "category": "schema",
+  "confidence": 1.0,
+  "source": "vasp-lsp",
+  "manual_ref": "https://www.vasp.at/wiki/index.php/INCAR",
+  "invalid_fixture": "tests/fixtures/rules/invalid_incar_value/INCAR",
+  "valid_fixture": "tests/fixtures/rules/invalid_incar_value/valid_INCAR",
+  "message_contains": "ENCUT expects a float value",
+  "range": {
+    "start": {
+      "line": 5,
+      "character": 8
+    },
+    "end": {
+      "line": 5,
+      "character": 11
+    }
+  },
+  "fix_hints_contains": "declared type",
+  "blocking": true
+}

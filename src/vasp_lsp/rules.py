@@ -76,9 +76,33 @@ INVALID_INCAR_TAG = _rule(
     ),
 )
 
+#: vasp.incar.invalid_value — error on a known INCAR tag whose value does not
+#: match the tag's declared type (integer/float/boolean/string). Upstream
+#: INCAR is the authoritative schema, so the rule ships at ``error`` severity
+#: per the OpenQC severity policy.
+INVALID_INCAR_VALUE = _rule(
+    rule_id="vasp.incar.invalid_value",
+    severity="error",
+    category="schema",
+    confidence=1.0,
+    summary=(
+        "Reports INCAR tags whose value does not match the tag's declared "
+        "type (e.g. a non-numeric string where the upstream schema expects "
+        "an integer or float, or a string where a boolean is required). "
+        "Such values are rejected or silently misinterpreted by VASP."
+    ),
+    manual_ref="https://www.vasp.at/wiki/index.php/INCAR",
+    source="official",
+    fix_hint=(
+        "Replace the value with one matching the tag's declared type "
+        "(see https://www.vasp.at/wiki/index.php/INCAR)."
+    ),
+)
+
 #: Ordered registry of all first-class rules exported by VASP-LSP.
 RULES_MANIFEST: Dict[str, Dict[str, Any]] = {
     INVALID_INCAR_TAG["rule_id"]: INVALID_INCAR_TAG,
+    INVALID_INCAR_VALUE["rule_id"]: INVALID_INCAR_VALUE,
 }
 
 
