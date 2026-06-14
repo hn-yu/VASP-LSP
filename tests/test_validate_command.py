@@ -121,3 +121,42 @@ class TestValidateCommand:
         finally:
             os.unlink(fake_bin) if os.path.exists(fake_bin) else None
             server.documents.pop("file:///tmp/INCAR", None)
+
+    def test_validate_generic_exception(self):
+        """Test that generic exceptions during subprocess.run are caught."""
+        fake_bin = tempfile.mktemp(suffix="vasp_bin")
+        try:
+            with open(fake_bin, "w") as bh:
+                bh.write("#!/bin/sh\necho 'ok'\n")
+            os.chmod(fake_bin, 0o755)
+
+            server.set_document_content("file:///tmp/INCAR", "ENCUT = 400")
+            with patch("vasp_lsp.server.subprocess.run", side_effect=OSError("permission denied")):
+                result = json.loads(_handle_validate(["file:///tmp/INCAR", fake_bin]))
+                assert result["status"] == "error"
+                assert "permission denied" in result["message"]
+        finally:
+            os.unlink(fake_bin) if os.path.exists(fake_bin) else None
+            server.documents.pop("file:///tmp/INCAR", None)
+
+    def test_validate_severity_parsing(self):
+        """Test that stdout/stderr lines are parsed into diagnostics with correct severity."""
+        fake_bin = tempfile.mktemp(suffix="vasp_bin")
+        try:
+            with open(fake_bin, "w") as bh:
+                bh.write(
+                    "#!/bin/sh\necho 'INFO: all clear'\necho 'WARNING: low ENCUT' >&2\necho 'ERROR: fatal crash' >&2\n"
+                )
+            os.chmod(fake_bin, 0o755)
+
+            server.set_document_content("file:///tmp/INCAR", "ENCUT = 400")
+            result = json.loads(_handle_validate(["file:///tmp/INCAR", fake_bin]))
+            assert result["status"] == "success"
+            diags = result["diagnostics"]
+            severities = [d["severity"] for d in diags]
+            assert "information" in severities
+            assert "warning" in severities
+            assert "error" in severities
+        finally:
+            os.unlink(fake_bin) if os.path.exists(fake_bin) else None
+            server.documents.pop("file:///tmp/INCAR", None)
