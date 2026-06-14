@@ -15,7 +15,14 @@ VASP-LSP provides intelligent code editing features for VASP calculation input f
 - 📖 **Hover Documentation** - Instant access to VASP parameter documentation
 - ⚠️ **Diagnostics** - Real-time error detection and warnings
 - ✨ **Document Formatting** - Format INCAR, POSCAR, and KPOINTS files
-- 🔧 **Quick Fixes** - Automatic fixes for common issues (NEW)
+- ✨ **Range Formatting** - Format selected lines in INCAR files
+- 🔍 **Go-to-Definition** - Jump to the first definition of an INCAR tag
+- 🔍 **Find References** - Find all occurrences of an INCAR tag
+- 📋 **Document Symbols** - Outline view for INCAR, POSCAR, and KPOINTS
+- 🔎 **Workspace Symbols** - Search symbols across open INCAR documents
+- ✏️ **Rename** - Safe workspace-wide rename of INCAR tags
+- 🔧 **Quick Fixes** - Automatic fixes for common issues
+- ✅ **Validate/Dry-Run** - Optional VASP binary validation with diagnostics
 
 ## Installation
 
@@ -75,8 +82,17 @@ Format your VASP input files:
 - **INCAR**: Parameters grouped by category, aligned values
 - **POSCAR**: Consistent coordinate precision, proper spacing
 - **KPOINTS**: Normalized grid types, formatted k-point lists
+- **Range Formatting**: Format only selected lines in INCAR files
 
-### Quick Fixes (NEW)
+### Go-to-Definition and References
+Navigate INCAR tags:
+- **Definition**: Jump to the first occurrence of a tag
+- **References**: Find all occurrences of a tag in the document
+
+### Rename
+Safe workspace-wide rename of INCAR tags with preview validation.
+
+### Quick Fixes
 Automatic fixes for common issues:
 - Add missing SIGMA when ISMEAR >= 0
 - Add missing MAGMOM when ISPIN = 2
@@ -129,12 +145,13 @@ vasp-lsp-schema ENCUT
 vasp-lsp-examples static
 vasp-lsp-tool next-tokens ISMEAR
 
-# Single-file agent queries (context, complete, hover, symbols, fix).
+# Single-file agent queries (context, complete, hover, symbols, fix, validate).
 vasp-lsp-tool check path/to/INCAR
 vasp-lsp-tool context path/to/INCAR --line 5
 vasp-lsp-tool hover path/to/INCAR --line 0 --character 2
 vasp-lsp-tool symbols path/to/INCAR
 vasp-lsp-tool fix path/to/INCAR
+vasp-lsp-tool validate path/to/INCAR --binary /path/to/vasp
 ```
 
 Every payload includes a `capabilities` block listing the available operations,
@@ -167,6 +184,7 @@ The project maintains high code quality through:
 - **Code cleanup** - Dead code and unreachable branches removed.
 - **Static analysis** - Linting with Ruff, formatting with Black, type checking with mypy.
 - **Type hints** - Full type annotations for better IDE support.
+- **992 tests** covering formatting, diagnostics, completion, hover, navigation, rename, code actions, and validate commands.
 
 ## License
 

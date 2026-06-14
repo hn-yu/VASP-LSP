@@ -7,41 +7,54 @@ providing features like autocomplete, hover documentation, and diagnostics.
 import argparse
 import json
 import logging
+import os
 import re
-from typing import Dict, List, Optional
+import subprocess
+import tempfile
+from typing import Any, Dict, List, Optional
 
 from lsprotocol.types import (
     TEXT_DOCUMENT_CODE_ACTION,
     TEXT_DOCUMENT_COMPLETION,
+    TEXT_DOCUMENT_DEFINITION,
     TEXT_DOCUMENT_DID_CHANGE,
     TEXT_DOCUMENT_DID_OPEN,
     TEXT_DOCUMENT_DID_SAVE,
     TEXT_DOCUMENT_DOCUMENT_SYMBOL,
     TEXT_DOCUMENT_FORMATTING,
     TEXT_DOCUMENT_HOVER,
+    TEXT_DOCUMENT_PREPARE_RENAME,
+    TEXT_DOCUMENT_RANGE_FORMATTING,
+    TEXT_DOCUMENT_REFERENCES,
     TEXT_DOCUMENT_RENAME,
+    WORKSPACE_SYMBOL,
     CodeActionOptions,
     CodeActionParams,
     CompletionOptions,
     CompletionParams,
+    DefinitionParams,
     Diagnostic,
     DidChangeTextDocumentParams,
     DidOpenTextDocumentParams,
     DidSaveTextDocumentParams,
     DocumentFormattingParams,
+    DocumentRangeFormattingParams,
     DocumentSymbolParams,
     ExecuteCommandParams,
     HoverParams,
     InitializeParams,
     InitializeResult,
     Position,
+    PrepareRenameParams,
     Range,
+    ReferenceParams,
     RenameParams,
     ServerCapabilities,
     TextDocumentSyncKind,
     TextDocumentSyncOptions,
     TextEdit,
     WorkspaceEdit,
+    WorkspaceSymbolParams,
 )
 from pygls.server import LanguageServer
 
@@ -112,8 +125,12 @@ def initialize(params: InitializeParams) -> InitializeResult:
         ),
         hover_provider=True,
         document_formatting_provider=True,
+        document_range_formatting_provider=True,
         document_symbol_provider=True,
-        rename_provider=True,
+        definition_provider=True,
+        references_provider=True,
+        rename_provider={"prepareProvider": True},
+        workspace_symbol_provider=True,
         code_action_provider=CodeActionOptions(
             code_action_kinds=[
                 "quickfix",
@@ -121,7 +138,10 @@ def initialize(params: InitializeParams) -> InitializeResult:
             ]
         ),
         execute_command_provider={
-            "commands": ["vasp-lsp.diagnosticSnapshot"],
+            "commands": [
+                "vasp-lsp.diagnosticSnapshot",
+                "vasp-lsp.validate",
+            ],
         },
     )
 
@@ -200,6 +220,23 @@ def formatting(params: DocumentFormattingParams):
     return server.formatting_provider.format_document(content, uri, options)
 
 
+@server.feature(TEXT_DOCUMENT_RANGE_FORMATTING)
+def range_formatting(params: DocumentRangeFormattingParams):
+    """Handle range formatting request."""
+    uri = params.text_document.uri
+    content = server.get_document_content(uri)
+
+    if content is None:
+        return None
+
+    options = {
+        "tabSize": params.options.tab_size,
+        "insertSpaces": params.options.insert_spaces,
+    }
+
+    return server.formatting_provider.format_range(content, uri, params.range, options)
+
+
 @server.feature(TEXT_DOCUMENT_CODE_ACTION)
 def code_action(params: CodeActionParams):
     """Handle code action request."""
@@ -228,6 +265,56 @@ def document_symbol(params: DocumentSymbolParams):
         return []
 
     return server.navigation_provider.get_symbols(content, uri)
+
+
+@server.feature(TEXT_DOCUMENT_DEFINITION)
+def definition(params: DefinitionParams):
+    """Handle go-to-definition requests."""
+    uri = params.text_document.uri
+    content = server.get_document_content(uri)
+
+    if content is None:
+        return None
+
+    return server.navigation_provider.get_definition(content, uri, params.position)
+
+
+@server.feature(TEXT_DOCUMENT_REFERENCES)
+def references(params: ReferenceParams):
+    """Handle find-references requests."""
+    uri = params.text_document.uri
+    content = server.get_document_content(uri)
+
+    if content is None:
+        return []
+
+    return server.navigation_provider.get_references(content, uri, params.position)
+
+
+@server.feature(WORKSPACE_SYMBOL)
+def workspace_symbol(params: WorkspaceSymbolParams):
+    """Handle workspace symbol queries across open INCAR documents."""
+    query = (params.query or "").strip().upper()
+    symbols = []
+    for uri, content in server.documents.items():
+        if _get_file_type(uri) != "INCAR":
+            continue
+        for document_symbol in server.navigation_provider.get_symbols(content, uri):
+            if not query or query in document_symbol.name.upper():
+                symbols.append(document_symbol)
+    return symbols
+
+
+@server.feature(TEXT_DOCUMENT_PREPARE_RENAME)
+def prepare_rename(params: PrepareRenameParams):
+    """Validate rename targets before applying workspace edits."""
+    uri = params.text_document.uri
+    content = server.get_document_content(uri)
+
+    if content is None:
+        return None
+
+    return server.navigation_provider.prepare_rename(content, uri, params.position)
 
 
 @server.feature(TEXT_DOCUMENT_RENAME)
@@ -263,33 +350,43 @@ def rename(params: RenameParams):
     if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", new_name):
         return None
 
-    # Rename all occurrences of the tag in the document
-    edits = []
-    for line_idx, doc_line in enumerate(lines):
-        tag_match = re.match(r"^(\s*)([A-Za-z_][A-Za-z0-9_]*)\s*=", doc_line)
-        if tag_match and tag_match.group(2).upper() == old_name.upper():
-            start_char = tag_match.start(2)
-            end_char = tag_match.end(2)
-
-            edits.append(
-                TextEdit(
-                    range=Range(
-                        start=Position(line=line_idx, character=start_char),
-                        end=Position(line=line_idx, character=end_char),
-                    ),
-                    new_text=new_name,
+    # Rename all occurrences of the tag across open INCAR documents.
+    changes: Dict[str, List[TextEdit]] = {}
+    for doc_uri, doc_content in server.documents.items():
+        if _get_file_type(doc_uri) != "INCAR":
+            continue
+        doc_lines = doc_content.split("\n")
+        doc_edits: List[TextEdit] = []
+        for line_idx, doc_line in enumerate(doc_lines):
+            tag_match = re.match(r"^(\s*)([A-Za-z_][A-Za-z0-9_]*)\s*=", doc_line)
+            if tag_match and tag_match.group(2).upper() == old_name.upper():
+                start_char = tag_match.start(2)
+                end_char = tag_match.end(2)
+                doc_edits.append(
+                    TextEdit(
+                        range=Range(
+                            start=Position(line=line_idx, character=start_char),
+                            end=Position(line=line_idx, character=end_char),
+                        ),
+                        new_text=new_name,
+                    )
                 )
-            )
+        if doc_edits:
+            changes[doc_uri] = doc_edits
 
-    if not edits:
+    if not changes:
         return None
 
-    return WorkspaceEdit(changes={uri: edits})
+    return WorkspaceEdit(changes=changes)
 
 
 # ---------------------------------------------------------------------------
 # Execute command: diagnostic snapshot for agent feedback loops (#18)
+# Execute command: optional VASP validate/dry-run (#25)
 # ---------------------------------------------------------------------------
+
+# Default timeout for VASP validate/dry-run (seconds).
+_DEFAULT_VALIDATE_TIMEOUT = 30
 
 
 @server.feature("workspace/executeCommand")
@@ -299,6 +396,11 @@ def execute_command(params: ExecuteCommandParams):
     Supports:
       - ``vasp-lsp.diagnosticSnapshot``: returns a JSON string with a structured
         diagnostic snapshot for the requested document URI.
+      - ``vasp-lsp.validate``: run an optional VASP validate/dry-run command
+        and return structured diagnostics.  When no solver binary is
+        configured the result contains a clear configuration error.  The
+        command respects a caller-supplied ``timeout`` (default 30 s) and
+        cleans up any child process on cancellation.
     """
     command = params.command
     arguments = params.arguments or []
@@ -315,7 +417,144 @@ def execute_command(params: ExecuteCommandParams):
         )
         return json.dumps(snapshot, default=str)
 
+    if command == "vasp-lsp.validate":
+        return _handle_validate(arguments)
+
     return None
+
+
+def _handle_validate(arguments: List[Any]) -> str:
+    """Run VASP validate/dry-run and return structured JSON diagnostics.
+
+    Arguments:
+      [0] document URI
+      [1] (optional) path to VASP binary
+      [2] (optional) timeout in seconds (default 30)
+
+    Returns a JSON string with keys:
+      - status: "success" | "configuration_error" | "timeout" | "error"
+      - message: human-readable summary
+      - diagnostics: list of diagnostic dicts (when available)
+    """
+    if not arguments:
+        return json.dumps(
+            {
+                "status": "configuration_error",
+                "message": "No document URI provided.",
+                "diagnostics": [],
+            }
+        )
+
+    uri = arguments[0]
+    binary_path: Optional[str] = arguments[1] if len(arguments) > 1 else None
+    timeout: int = int(arguments[2]) if len(arguments) > 2 else _DEFAULT_VALIDATE_TIMEOUT
+
+    if not binary_path:
+        binary_path = os.environ.get("VASP_BINARY") or os.environ.get("VASP_LSP_VASP_BINARY")
+
+    if not binary_path or not os.path.isfile(binary_path):
+        return json.dumps(
+            {
+                "status": "configuration_error",
+                "message": (
+                    "VASP binary not configured. Set the VASP_BINARY environment "
+                    "variable or pass the binary path as the second argument to "
+                    "vasp-lsp.validate."
+                ),
+                "diagnostics": [],
+            }
+        )
+
+    content = server.get_document_content(uri)
+    if content is None:
+        return json.dumps(
+            {
+                "status": "configuration_error",
+                "message": f"Document not open: {uri}",
+                "diagnostics": [],
+            }
+        )
+
+    file_type = _get_file_type(uri)
+    if file_type == "UNKNOWN":
+        return json.dumps(
+            {
+                "status": "configuration_error",
+                "message": "Validate only supports INCAR, POSCAR, and KPOINTS files.",
+                "diagnostics": [],
+            }
+        )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Write the document content to a temp file matching the expected name.
+        ext_map = {"INCAR": "INCAR", "POSCAR": "POSCAR", "KPOINTS": "KPOINTS"}
+        tmpfile = os.path.join(tmpdir, ext_map.get(file_type, "INCAR"))
+        with open(tmpfile, "w") as fh:
+            fh.write(content)
+
+        try:
+            result = subprocess.run(
+                [binary_path, "--dry-run", "--read-from", tmpfile],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                cwd=tmpdir,
+            )
+        except subprocess.TimeoutExpired:
+            return json.dumps(
+                {
+                    "status": "timeout",
+                    "message": f"VASP validate timed out after {timeout}s.",
+                    "diagnostics": [],
+                }
+            )
+        except Exception as exc:
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": f"Failed to run VASP binary: {exc}",
+                    "diagnostics": [],
+                }
+            )
+
+    diagnostics = _parse_vasp_output_to_diagnostics(result.stdout, result.stderr, file_type)
+    return json.dumps(
+        {
+            "status": "success",
+            "message": f"VASP validate completed with exit code {result.returncode}.",
+            "diagnostics": diagnostics,
+            "exit_code": result.returncode,
+        }
+    )
+
+
+def _parse_vasp_output_to_diagnostics(
+    stdout: str, stderr: str, file_type: str
+) -> List[Dict[str, Any]]:
+    """Parse VASP validate stdout/stderr into structured diagnostic dicts."""
+    diagnostics: List[Dict[str, Any]] = []
+    combined = stdout + "\n" + stderr
+    for line in combined.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        lower = stripped.lower()
+        severity = "warning"
+        if "error" in lower or "fatal" in lower:
+            severity = "error"
+        elif "warning" in lower or "warn" in lower:
+            severity = "warning"
+        elif "info" in lower:
+            severity = "information"
+        diagnostics.append(
+            {
+                "message": stripped,
+                "severity": severity,
+                "source": "vasp-validate",
+                "file_type": file_type,
+            }
+        )
+    return diagnostics
 
 
 def _publish_diagnostics(uri: str, content: str):
