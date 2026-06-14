@@ -1,0 +1,25 @@
+{
+  "rule_id": "vasp.parallel.ncore_npar_conflict",
+  "software": "vasp",
+  "file_type": "INCAR",
+  "severity": "warning",
+  "category": "semantic consistency",
+  "confidence": 0.9,
+  "source": "vasp-lsp",
+  "manual_ref": "https://www.vasp.at/wiki/index.php/NCORE",
+  "invalid_fixture": "tests/fixtures/rules/ncore_npar_conflict/INCAR",
+  "valid_fixture": "tests/fixtures/rules/ncore_npar_conflict/valid_INCAR",
+  "message_contains": "NPAR",
+  "range": {
+    "start": {
+      "line": 11,
+      "character": 0
+    },
+    "end": {
+      "line": 11,
+      "character": 8
+    }
+  },
+  "fix_hints_contains": "NCORE",
+  "blocking": false
+}

@@ -18,6 +18,7 @@ from ..rules import (
     ENCUT_BELOW_ENMAX,
     INVALID_INCAR_TAG,
     INVALID_INCAR_VALUE,
+    PARALLEL_NCORE_NPAR_CONFLICT,
     SMEARING_ISMEAR_SIGMA_MISMATCH,
     SPIN_MISSING_MAGMOM,
     get_rule_fix_hint,
@@ -451,6 +452,39 @@ class DiagnosticsProvider:
             },
         )
 
+    def _ncore_npar_conflict_diagnostic(self, npar) -> Diagnostic:
+        """Build the vasp.parallel.ncore_npar_conflict diagnostic.
+
+        NCORE and NPAR are mutually-exclusive parallelism controls: NCORE
+        sets the cores per orbital and NPAR sets the parallel band groups;
+        VASP derives one from the other, so declaring both is contradictory.
+        The range underlines the whole NPAR assignment (the keyword the user
+        should remove in favour of NCORE). Rule metadata (category,
+        confidence, manual_ref, fix_hint) travels on ``Diagnostic.data`` so
+        the agent-facing rich JSON contract surfaces it. The message keeps
+        both ``NPAR`` and ``NCORE`` substrings so the existing quickfix
+        (remove NPAR) still anchors on this diagnostic.
+        """
+        line_index = npar.line_number - 1
+        line_end = max(len(npar.raw_line), 1)
+        fix_hint = get_rule_fix_hint(PARALLEL_NCORE_NPAR_CONFLICT["rule_id"])
+        return Diagnostic(
+            range=Range(
+                start=Position(line=line_index, character=0),
+                end=Position(line=line_index, character=line_end),
+            ),
+            message="NPAR and NCORE should not be set together. Prefer NCORE.",
+            severity=DiagnosticSeverity.Warning,
+            source="vasp-lsp",
+            code=PARALLEL_NCORE_NPAR_CONFLICT["rule_id"],
+            data={
+                "category": PARALLEL_NCORE_NPAR_CONFLICT["category"],
+                "confidence": PARALLEL_NCORE_NPAR_CONFLICT["confidence"],
+                "manual_ref": PARALLEL_NCORE_NPAR_CONFLICT["manual_ref"],
+                "fix_hints": [fix_hint] if fix_hint else [],
+            },
+        )
+
     def _validate_incar_value(self, tag, param, content) -> List[Diagnostic]:
         """Validate a single INCAR parameter value against schema metadata.
 
@@ -669,22 +703,20 @@ class DiagnosticsProvider:
             if isinstance(ismear.value, int) and ismear.value >= 0:
                 diagnostics.append(self._ismear_sigma_missing_diagnostic(ismear))
 
-        # Check NCORE and NPAR conflict
+        # Check NCORE and NPAR conflict -> vasp.parallel.ncore_npar_conflict
+        # (#56). NCORE (cores per orbital) and NPAR (parallel band groups) are
+        # mutually-exclusive parallelism controls; VASP derives one from the
+        # other, so declaring both is contradictory. Upstream behavior, not a
+        # hard runtime failure, so the rule ships at warning severity with the
+        # rule's stable code and metadata. The schema-driven conflicts_with
+        # check (NPAR.conflicts_with = [NCORE]) would otherwise double-fire
+        # the same condition without the rule id, so the pair is owned here
+        # and skipped in ``_check_schema_conflicts``.
         ncore = parser.get_parameter("NCORE")
         npar = parser.get_parameter("NPAR")
 
         if ncore and npar:
-            diagnostics.append(
-                Diagnostic(
-                    range=Range(
-                        start=Position(line=npar.line_number - 1, character=0),
-                        end=Position(line=npar.line_number - 1, character=len(npar.raw_line)),
-                    ),
-                    message="NPAR and NCORE should not be set together. Prefer NCORE.",
-                    severity=DiagnosticSeverity.Warning,
-                    source="vasp-lsp",
-                )
-            )
+            diagnostics.append(self._ncore_npar_conflict_diagnostic(npar))
 
         # Check LDAU requirements
         ldau = parser.get_parameter("LDAU")
@@ -1209,6 +1241,11 @@ class DiagnosticsProvider:
             for conflict_name in tag.conflicts_with:
                 conflict_param = all_params.get(conflict_name)
                 if conflict_param is None:
+                    continue
+                # The NCORE/NPAR pair is owned by vasp.parallel.ncore_npar_conflict
+                # (#56) in ``_check_incar_dependencies`` so the diagnostic carries
+                # the stable rule id and metadata; skip the generic duplicate here.
+                if {tag_name, conflict_name} == {"NCORE", "NPAR"}:
                     continue
                 # Use the *later* parameter as the diagnostic anchor
                 if param.line_number > conflict_param.line_number:

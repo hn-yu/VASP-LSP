@@ -1,0 +1,13 @@
+# Valid INCAR fixture: every tag below is part of the upstream
+# INCAR schema (https://www.vasp.at/wiki/index.php/INCAR). Only NCORE is
+# declared for parallelization control
+# (https://www.vasp.at/wiki/index.php/NCORE); NPAR is omitted, so the two
+# mutually-exclusive flags are not both set and this file must NOT emit
+# vasp.parallel.ncore_npar_conflict.
+SYSTEM = valid-value-fixture
+ENCUT = 520
+ISMEAR = 0
+SIGMA = 0.05
+EDIFF = 1E-6
+NSW = 100
+NCORE = 4

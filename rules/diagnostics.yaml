@@ -66,6 +66,17 @@
       "summary": "Reports an INCAR ENCUT value below the maximum ENMAX found in the neighbouring POTCAR evidence. Each pseudopotential dataset is shipped with a recommended plane-wave cutoff (ENMAX); running ENCUT below the largest of these degrades the basis set the pseudopotentials were balanced for and almost always indicates a too-low cutoff for the calculation.",
       "manual_ref": "https://www.vasp.at/wiki/index.php/ENCUT",
       "fix_hint": "Raise ENCUT to at least the largest POTCAR ENMAX (see https://www.vasp.at/wiki/index.php/ENCUT), or ~1.3 x ENMAX for production accuracy."
+    },
+    {
+      "rule_id": "vasp.parallel.ncore_npar_conflict",
+      "software": "vasp",
+      "severity": "warning",
+      "category": "semantic consistency",
+      "confidence": 0.9,
+      "source": "official",
+      "summary": "Reports INCAR files that declare both NCORE and NPAR. The two flags are mutually-exclusive parallelism controls: NCORE sets the number of cores working on a single orbital and NPAR sets the number of parallel band groups; VASP derives one from the other, so declaring both is contradictory and almost always indicates a copy-paste from two different parallelization recipes.",
+      "manual_ref": "https://www.vasp.at/wiki/index.php/NCORE",
+      "fix_hint": "Remove NPAR and keep NCORE for parallelization control (see https://www.vasp.at/wiki/index.php/NCORE and https://www.vasp.at/wiki/index.php/NPAR); VASP derives NPAR from NCORE automatically."
     }
   ]
 }

@@ -1,0 +1,12 @@
+# Invalid INCAR fixture for vasp.parallel.ncore_npar_conflict
+# NCORE and NPAR are mutually-exclusive parallelism flags
+# (https://www.vasp.at/wiki/index.php/NCORE and
+# https://www.vasp.at/wiki/index.php/NPAR): NCORE controls the number of
+# cores working on a single orbital, while NPAR controls the number of band
+# groups; VASP derives one from the other, so declaring both is
+# contradictory and almost always indicates a copy-paste from two different
+# parallelization recipes. This must surface
+# vasp.parallel.ncore_npar_conflict at warning severity, underlining the
+# NPAR line (the later keyword the user should reconcile).
+NCORE = 4
+NPAR = 4

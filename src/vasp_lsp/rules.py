@@ -185,6 +185,39 @@ ENCUT_BELOW_ENMAX = _rule(
     ),
 )
 
+#: vasp.parallel.ncore_npar_conflict — warn when both NCORE and NPAR are set
+#: in INCAR. The two flags are mutually-exclusive parallelism controls:
+#: NCORE governs the number of cores working on a single orbital, while NPAR
+#: governs the number of parallel band groups; VASP derives one from the
+#: other, so declaring both is contradictory and almost always indicates a
+#: copy-paste from two different parallelization recipes. Upstream behavior,
+#: not a hard runtime failure, so the rule ships at ``warning`` severity per
+#: the OpenQC severity policy. Upstream references:
+#: https://www.vasp.at/wiki/index.php/NCORE and
+#: https://www.vasp.at/wiki/index.php/NPAR
+PARALLEL_NCORE_NPAR_CONFLICT = _rule(
+    rule_id="vasp.parallel.ncore_npar_conflict",
+    severity="warning",
+    category="semantic consistency",
+    confidence=0.9,
+    summary=(
+        "Reports INCAR files that declare both NCORE and NPAR. The two flags "
+        "are mutually-exclusive parallelism controls: NCORE sets the number of "
+        "cores working on a single orbital and NPAR sets the number of parallel "
+        "band groups; VASP derives one from the other, so declaring both is "
+        "contradictory and almost always indicates a copy-paste from two "
+        "different parallelization recipes."
+    ),
+    manual_ref="https://www.vasp.at/wiki/index.php/NCORE",
+    source="official",
+    fix_hint=(
+        "Remove NPAR and keep NCORE for parallelization control "
+        "(see https://www.vasp.at/wiki/index.php/NCORE and "
+        "https://www.vasp.at/wiki/index.php/NPAR); VASP derives NPAR from "
+        "NCORE automatically."
+    ),
+)
+
 #: Ordered registry of all first-class rules exported by VASP-LSP.
 RULES_MANIFEST: Dict[str, Dict[str, Any]] = {
     INVALID_INCAR_TAG["rule_id"]: INVALID_INCAR_TAG,
@@ -192,6 +225,7 @@ RULES_MANIFEST: Dict[str, Dict[str, Any]] = {
     SPIN_MISSING_MAGMOM["rule_id"]: SPIN_MISSING_MAGMOM,
     SMEARING_ISMEAR_SIGMA_MISMATCH["rule_id"]: SMEARING_ISMEAR_SIGMA_MISMATCH,
     ENCUT_BELOW_ENMAX["rule_id"]: ENCUT_BELOW_ENMAX,
+    PARALLEL_NCORE_NPAR_CONFLICT["rule_id"]: PARALLEL_NCORE_NPAR_CONFLICT,
 }
 
 
