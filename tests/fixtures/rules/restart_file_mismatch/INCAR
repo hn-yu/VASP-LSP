@@ -1,0 +1,17 @@
+# Invalid INCAR fixture for vasp.restart.file_mismatch
+# ISTART (https://www.vasp.at/wiki/index.php/ISTART) governs whether VASP
+# restarts from an existing WAVECAR. ISTART = 1 means "restart from
+# WAVECAR: use constant cut-off, read plane-wave coefficients", which
+# requires a pre-existing WAVECAR in the calculation directory that is
+# compatible with the current run (matching ENCUT, NBANDS, FFT mesh, and
+# parallelization layout). No WAVECAR is present next to this INCAR, so
+# the restart is incompatible with the available files: VASP would fall
+# back to ISTART = 0 behaviour (or abort depending on build), silently
+# discarding the intended restart. This must surface
+# vasp.restart.file_mismatch at warning severity, underlining the
+# ISTART assignment (the keyword the user should reconcile with the
+# available restart evidence).
+ISTART = 1
+ENCUT = 520
+ISMEAR = 0
+SIGMA = 0.05

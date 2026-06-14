@@ -1,0 +1,25 @@
+{
+  "rule_id": "vasp.restart.file_mismatch",
+  "software": "vasp",
+  "file_type": "INCAR",
+  "severity": "warning",
+  "category": "semantic consistency",
+  "confidence": 0.9,
+  "source": "vasp-lsp",
+  "manual_ref": "https://www.vasp.at/wiki/index.php/ISTART",
+  "invalid_fixture": "tests/fixtures/rules/restart_file_mismatch/INCAR",
+  "valid_fixture": "tests/fixtures/rules/restart_file_mismatch/valid_INCAR",
+  "message_contains": "ISTART",
+  "range": {
+    "start": {
+      "line": 13,
+      "character": 0
+    },
+    "end": {
+      "line": 13,
+      "character": 10
+    }
+  },
+  "fix_hints_contains": "ISTART",
+  "blocking": false
+}

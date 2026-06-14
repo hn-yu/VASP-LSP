@@ -88,6 +88,17 @@
       "summary": "Reports INCAR files that combine KPAR > 1 with a band-level parallelization flag (NCORE > 1 or NPAR > 1). KPAR partitions the MPI ranks into k-point groups while NCORE/NPAR partition the remaining ranks within each group over bands/orbitals; the two flag families operate on different MPI partitioning axes, so declaring both leaves the combined layout undefined and almost always indicates a copy-paste from two different parallelization recipes.",
       "manual_ref": "https://www.vasp.at/wiki/index.php/KPAR",
       "fix_hint": "Pick a single parallelization axis: keep KPAR for k-point parallelization and drop the band-level flag, or remove KPAR and keep NCORE for band parallelization (see https://www.vasp.at/wiki/index.php/KPAR and https://www.vasp.at/wiki/index.php/NCORE)."
+    },
+    {
+      "rule_id": "vasp.restart.file_mismatch",
+      "software": "vasp",
+      "severity": "warning",
+      "category": "semantic consistency",
+      "confidence": 0.9,
+      "source": "official",
+      "summary": "Reports INCAR files whose restart settings imply reading a restart file that is not present in the calculation directory. ISTART >= 1 reads plane-wave coefficients from a pre-existing WAVECAR, and ICHARG in {1, 11} reads a precomputed charge density from CHGCAR; both require a compatible restart file matching the current run's ENCUT, NBANDS, FFT mesh, and parallelization layout. A restart-implying setting combined with a missing restart file is incompatible with the available evidence and almost always indicates a forgotten restart artifact or a stale restart workflow.",
+      "manual_ref": "https://www.vasp.at/wiki/index.php/ISTART",
+      "fix_hint": "Provide a compatible restart file alongside the INCAR, or switch to a from-scratch start: set ISTART = 0 if no WAVECAR is intended (see https://www.vasp.at/wiki/index.php/ISTART), or set ICHARG = 0 / 2 to compute the charge density internally (see https://www.vasp.at/wiki/index.php/ICHARG)."
     }
   ]
 }

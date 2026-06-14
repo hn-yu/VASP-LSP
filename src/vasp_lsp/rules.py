@@ -255,6 +255,45 @@ PARALLEL_KPAR_INCOMPATIBLE = _rule(
     ),
 )
 
+#: vasp.restart.file_mismatch — warn when the INCAR restart settings imply
+#: reading a restart file (WAVECAR for ISTART >= 1, or CHGCAR for ICHARG in
+#: {1, 11}) but no compatible restart file is present in the calculation
+#: directory. VASP restart files carry run-specific metadata (ENCUT, NBANDS,
+#: FFT mesh, parallelization layout); a restart-implying setting combined with
+#: a missing restart file leaves the run incompatible with the available
+#: evidence, since VASP would silently fall back to a fresh start or refuse to
+#: read the expected coefficients. This is an upstream-behavior mismatch rather
+#: than a hard runtime failure, so the rule ships at ``warning`` severity per
+#: the OpenQC severity policy. Upstream references:
+#: https://www.vasp.at/wiki/index.php/ISTART and
+#: https://www.vasp.at/wiki/index.php/ICHARG
+RESTART_FILE_MISMATCH = _rule(
+    rule_id="vasp.restart.file_mismatch",
+    severity="warning",
+    category="semantic consistency",
+    confidence=0.9,
+    summary=(
+        "Reports INCAR files whose restart settings imply reading a restart "
+        "file that is not present in the calculation directory. ISTART >= 1 "
+        "reads plane-wave coefficients from a pre-existing WAVECAR, and ICHARG "
+        "in {1, 11} reads a precomputed charge density from CHGCAR; both "
+        "require a compatible restart file matching the current run's ENCUT, "
+        "NBANDS, FFT mesh, and parallelization layout. A restart-implying "
+        "setting combined with a missing restart file is incompatible with the "
+        "available evidence and almost always indicates a forgotten restart "
+        "artifact or a stale restart workflow."
+    ),
+    manual_ref="https://www.vasp.at/wiki/index.php/ISTART",
+    source="official",
+    fix_hint=(
+        "Provide a compatible restart file alongside the INCAR, or switch to a "
+        "from-scratch start: set ISTART = 0 if no WAVECAR is intended "
+        "(see https://www.vasp.at/wiki/index.php/ISTART), or set ICHARG = 0 / 2 "
+        "to compute the charge density internally "
+        "(see https://www.vasp.at/wiki/index.php/ICHARG)."
+    ),
+)
+
 #: Ordered registry of all first-class rules exported by VASP-LSP.
 RULES_MANIFEST: Dict[str, Dict[str, Any]] = {
     INVALID_INCAR_TAG["rule_id"]: INVALID_INCAR_TAG,
@@ -264,6 +303,7 @@ RULES_MANIFEST: Dict[str, Dict[str, Any]] = {
     ENCUT_BELOW_ENMAX["rule_id"]: ENCUT_BELOW_ENMAX,
     PARALLEL_NCORE_NPAR_CONFLICT["rule_id"]: PARALLEL_NCORE_NPAR_CONFLICT,
     PARALLEL_KPAR_INCOMPATIBLE["rule_id"]: PARALLEL_KPAR_INCOMPATIBLE,
+    RESTART_FILE_MISMATCH["rule_id"]: RESTART_FILE_MISMATCH,
 }
 
 

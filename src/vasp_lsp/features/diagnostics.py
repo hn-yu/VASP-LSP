@@ -20,6 +20,7 @@ from ..rules import (
     INVALID_INCAR_VALUE,
     PARALLEL_KPAR_INCOMPATIBLE,
     PARALLEL_NCORE_NPAR_CONFLICT,
+    RESTART_FILE_MISMATCH,
     SMEARING_ISMEAR_SIGMA_MISMATCH,
     SPIN_MISSING_MAGMOM,
     get_rule_fix_hint,
@@ -523,6 +524,41 @@ class DiagnosticsProvider:
             },
         )
 
+    def _restart_file_mismatch_diagnostic(self, param, message: str) -> Diagnostic:
+        """Build the vasp.restart.file_mismatch diagnostic.
+
+        The restart-implying INCAR setting (ISTART >= 1 reads a WAVECAR; ICHARG
+        in {1, 11} reads a CHGCAR) requires a compatible restart file matching
+        the current run's ENCUT, NBANDS, FFT mesh, and parallelization layout.
+        When the file is absent the run is incompatible with the available
+        evidence. The range underlines the whole restart-implying assignment
+        (the keyword the user should reconcile with the restart evidence). Rule
+        metadata (category, confidence, manual_ref, fix_hint) travels on
+        ``Diagnostic.data`` so the agent-facing rich JSON contract surfaces it.
+        The message is passed in by the caller so the ISTART/ICHARG variant can
+        keep the established substring (``usually requires WAVECAR`` /
+        ``usually requires a precomputed CHGCAR``) that quickfixes anchor on.
+        """
+        line_index = param.line_number - 1
+        line_end = max(len(param.raw_line), 1)
+        fix_hint = get_rule_fix_hint(RESTART_FILE_MISMATCH["rule_id"])
+        return Diagnostic(
+            range=Range(
+                start=Position(line=line_index, character=0),
+                end=Position(line=line_index, character=line_end),
+            ),
+            message=message,
+            severity=DiagnosticSeverity.Warning,
+            source="vasp-lsp",
+            code=RESTART_FILE_MISMATCH["rule_id"],
+            data={
+                "category": RESTART_FILE_MISMATCH["category"],
+                "confidence": RESTART_FILE_MISMATCH["confidence"],
+                "manual_ref": RESTART_FILE_MISMATCH["manual_ref"],
+                "fix_hints": [fix_hint] if fix_hint else [],
+            },
+        )
+
     def _validate_incar_value(self, tag, param, content) -> List[Diagnostic]:
         """Validate a single INCAR parameter value against schema metadata.
 
@@ -1022,8 +1058,17 @@ class DiagnosticsProvider:
         if icharg and icharg.value in (1, 11):
             chgcar_content = self._read_neighbor(document_uri, "CHGCAR", workspace_documents)
             if chgcar_content is None:
+                # ICHARG in {1, 11} reads a precomputed charge density from a
+                # pre-existing CHGCAR that must be present and compatible with
+                # the current run. A missing CHGCAR is an incompatible restart
+                # setup -> vasp.restart.file_mismatch (#60). Upstream behavior,
+                # not a hard runtime failure, so the rule ships at warning
+                # severity with the rule's stable code and metadata. The message
+                # keeps the ``usually requires a precomputed CHGCAR`` substring
+                # so quickfixes and existing preflight checks still anchor on
+                # this diagnostic.
                 diagnostics.append(
-                    self._parameter_info(
+                    self._restart_file_mismatch_diagnostic(
                         icharg,
                         f"ICHARG={icharg.value} usually requires a precomputed CHGCAR in the calculation directory.",
                     )
@@ -1162,8 +1207,17 @@ class DiagnosticsProvider:
         if istart and istart.value in (1, 2):
             wavecar_content = self._read_neighbor(document_uri, "WAVECAR", workspace_documents)
             if wavecar_content is None:
+                # ISTART >= 1 reads plane-wave coefficients from a pre-existing
+                # WAVECAR that must be present and compatible with the current
+                # run (matching ENCUT, NBANDS, FFT mesh, parallelization
+                # layout). A missing WAVECAR is an incompatible restart setup
+                # -> vasp.restart.file_mismatch (#60). Upstream behavior, not a
+                # hard runtime failure, so the rule ships at warning severity
+                # with the rule's stable code and metadata. The message keeps
+                # the ``usually requires WAVECAR`` substring so quickfixes and
+                # existing preflight checks still anchor on this diagnostic.
                 diagnostics.append(
-                    self._parameter_info(
+                    self._restart_file_mismatch_diagnostic(
                         istart,
                         f"ISTART={istart.value} usually requires WAVECAR in the calculation directory.",
                     )

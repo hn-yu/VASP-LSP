@@ -1,0 +1,9 @@
+# Valid INCAR fixture for vasp.restart.file_mismatch
+# ISTART = 0 (https://www.vasp.at/wiki/index.php/ISTART) means "start
+# from scratch": VASP does not read a WAVECAR, so no restart file is
+# required and the run is self-contained. This combination must NOT
+# trigger the rule.
+ISTART = 0
+ENCUT = 520
+ISMEAR = 0
+SIGMA = 0.05
