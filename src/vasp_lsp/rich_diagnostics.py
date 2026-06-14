@@ -143,19 +143,35 @@ def diagnostic_to_dict(
 ) -> dict[str, Any]:
     """Convert legacy/dataclass/LSP diagnostics into the rich v1 contract."""
     legacy = _legacy_payload(diagnostic)
+    # lsprotocol Diagnostic carries per-rule metadata under a nested ``data``
+    # dict (e.g. category, confidence, manual_ref, fix_hints). lsprotocol types
+    # are not dataclasses, so ``_legacy_payload`` returns an empty dict for
+    # them; pull ``data`` straight off the object in that case. Merge it as a
+    # fallback so first-class rules surface their metadata in the rich JSON
+    # without each call site having to set top-level legacy fields.
+    nested_data = legacy.get("data")
+    if nested_data is None:
+        nested_data = _get_attr_or_item(diagnostic, "data", None)
+    data = nested_data if isinstance(nested_data, dict) else {}
+
+    def _pick(key: str, default: Any) -> Any:
+        if legacy.get(key) is not None:
+            return legacy[key]
+        return data.get(key, default)
+
     code = legacy.get("code", _get_attr_or_item(diagnostic, "code", "diagnostic"))
     source = legacy.get("source", _get_attr_or_item(diagnostic, "source", f"{software}-lsp"))
     message = legacy.get("message", _get_attr_or_item(diagnostic, "message", ""))
     severity = severity_label(
         legacy.get("severity", _get_attr_or_item(diagnostic, "severity", None))
     )
-    confidence = float(legacy.get("confidence", 1.0) or 1.0)
-    category = legacy.get("category") or infer_category(code, message, source)
-    fix_hints = legacy.get("fix_hints")
+    confidence = float(_pick("confidence", 1.0) or 1.0)
+    category = _pick("category", None) or infer_category(code, message, source)
+    fix_hints = _pick("fix_hints", None)
     if fix_hints is None:
         suggested_fix = legacy.get("suggested_fix")
         fix_hints = [] if suggested_fix is None else [suggested_fix]
-    blocking = bool(legacy.get("blocking", severity == "error" and confidence >= 0.8))
+    blocking = bool(_pick("blocking", severity == "error" and confidence >= 0.8))
     return {
         "diagnostic_engine": DIAGNOSTIC_ENGINE_VERSION,
         "code": str(code or "diagnostic"),
@@ -167,9 +183,9 @@ def diagnostic_to_dict(
         "software": software,
         "file_type": file_type,
         "path": str(legacy.get("file", path)),
-        "expected": legacy.get("expected"),
-        "actual": legacy.get("actual"),
-        "manual_ref": legacy.get("manual_ref"),
+        "expected": _pick("expected", None),
+        "actual": _pick("actual", None),
+        "manual_ref": _pick("manual_ref", None),
         "fix_hints": fix_hints,
         "blocking": blocking,
         "message": str(message or ""),

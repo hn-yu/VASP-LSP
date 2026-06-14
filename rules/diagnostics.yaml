@@ -1,0 +1,27 @@
+# VASP-LSP diagnostic rule manifest (Diagnostic Engine v1).
+#
+# This file is the published export of vasp_lsp.rules.RULES_MANIFEST. It is
+# consumed by OpenQC and other tooling that needs the rule catalog without
+# importing the Python package. The body is strict JSON (a YAML subset) so
+# it can be parsed without a YAML dependency.
+#
+# Keep this file in sync with src/vasp_lsp/rules.py.
+#
+# Upstream reference: https://www.vasp.at/wiki/index.php/INCAR
+{
+  "diagnostic_engine": "1.0",
+  "software": "vasp",
+  "rules": [
+    {
+      "rule_id": "vasp.incar.invalid_tag",
+      "software": "vasp",
+      "severity": "error",
+      "category": "schema",
+      "confidence": 1.0,
+      "source": "official",
+      "summary": "Reports INCAR tags that are not part of the upstream VASP INCAR schema. Such tags are silently ignored by VASP and almost always indicate a typo or a stale parameter name.",
+      "manual_ref": "https://www.vasp.at/wiki/index.php/INCAR",
+      "fix_hint": "Remove the unknown tag or replace it with a valid INCAR tag (see https://www.vasp.at/wiki/index.php/INCAR)."
+    }
+  ]
+}

@@ -14,6 +14,7 @@ from ..parsers.kpoints_parser import KPOINTSMode, KPOINTSParser
 from ..parsers.poscar_parser import POSCARParser
 from ..parsers.potcar_parser import POTCARParser
 from ..parsers.vasp_log_parser import VASPLogDiagnostic, VASPLogParser
+from ..rules import INVALID_INCAR_TAG, get_rule_fix_hint
 from ..schemas.incar_tags import CALCULATION_MODES, CalculationMode, get_tag_info
 
 
@@ -268,19 +269,12 @@ class DiagnosticsProvider:
             )
             diagnostics.append(diagnostic)
 
-        # Check for unknown tags
+        # Check for unknown tags -> vasp.incar.invalid_tag (#51).
+        # Upstream INCAR is the authoritative schema, so unknown tags ship at
+        # error severity with the rule's stable code and metadata.
         for param_name, param in parser.get_all_parameters().items():
             if get_tag_info(param_name) is None:
-                diagnostic = Diagnostic(
-                    range=Range(
-                        start=Position(line=param.line_number - 1, character=param.column_start),
-                        end=Position(line=param.line_number - 1, character=param.column_end),
-                    ),
-                    message=f"Unknown INCAR tag: {param_name}",
-                    severity=DiagnosticSeverity.Warning,
-                    source="vasp-lsp",
-                )
-                diagnostics.append(diagnostic)
+                diagnostics.append(self._invalid_incar_tag_diagnostic(param_name, param))
             else:
                 tag = get_tag_info(param_name)
                 value_diagnostics = self._validate_incar_value(tag, param, content)
@@ -299,6 +293,35 @@ class DiagnosticsProvider:
         diagnostics.extend(self._check_schema_conflicts(parser))
 
         return diagnostics
+
+    def _invalid_incar_tag_diagnostic(self, tag_name: str, param) -> Diagnostic:
+        """Build the vasp.incar.invalid_tag diagnostic for an unknown INCAR tag.
+
+        The range underlines just the tag name (not the whole assignment) so
+        editors can render a precise squiggle. Rule metadata (category,
+        confidence, manual_ref, fix_hint) travels on ``Diagnostic.data`` so
+        the agent-facing rich JSON contract surfaces it.
+        """
+        name_start = max(int(param.column_start), 0)
+        name_end = max(name_start + len(tag_name), name_start + 1)
+        line_index = param.line_number - 1
+        fix_hint = get_rule_fix_hint(INVALID_INCAR_TAG["rule_id"])
+        return Diagnostic(
+            range=Range(
+                start=Position(line=line_index, character=name_start),
+                end=Position(line=line_index, character=name_end),
+            ),
+            message=f"Unknown INCAR tag: {tag_name}",
+            severity=DiagnosticSeverity.Error,
+            source="vasp-lsp",
+            code=INVALID_INCAR_TAG["rule_id"],
+            data={
+                "category": INVALID_INCAR_TAG["category"],
+                "confidence": INVALID_INCAR_TAG["confidence"],
+                "manual_ref": INVALID_INCAR_TAG["manual_ref"],
+                "fix_hints": [fix_hint] if fix_hint else [],
+            },
+        )
 
     def _validate_incar_value(self, tag, param, content) -> List[Diagnostic]:
         """Validate a single INCAR parameter value against schema metadata.

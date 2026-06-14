@@ -45,6 +45,32 @@ def check_path(path: Path) -> dict[str, Any]:
     )
 
 
+def rules_payload(rule_id: str | None = None) -> dict[str, Any]:
+    """Build the rules-export payload for OpenQC and other catalog consumers.
+
+    With no ``rule_id`` this exports the full rule manifest. With a
+    ``rule_id`` it explains a single rule (mirrors ``explain`` semantics for
+    rule metadata).
+    """
+    from .rules import RULES_MANIFEST, export_manifest, get_rule
+
+    if rule_id is not None:
+        rule = get_rule(rule_id)
+        payload: dict[str, Any] = {
+            "operation": "rules",
+            "software": SOFTWARE,
+            "rule_id": rule_id,
+            "found": rule is not None,
+            "rule": rule,
+            "known_rule_ids": sorted(RULES_MANIFEST),
+        }
+        return with_capabilities(payload, "rules")
+    payload = dict(export_manifest())
+    payload["operation"] = "rules"
+    payload["rule_count"] = len(RULES_MANIFEST)
+    return with_capabilities(payload, "rules")
+
+
 def check_target(path: Path) -> dict[str, Any]:
     """Build the PLAN24 JSON payload for an input file or calculation directory."""
     diagnostics_by_path = _collect_plan24_check_diagnostics(path)
@@ -252,9 +278,17 @@ def explain_main(argv: list[str] | None = None) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="vasp-lsp-tool")
     subparsers = parser.add_subparsers(dest="operation", required=True)
-    for operation in ("check", "context", "complete", "hover", "symbols", "fix"):
+    for operation in ("check", "context", "complete", "hover", "symbols", "fix", "rules"):
         sub = subparsers.add_parser(operation)
-        sub.add_argument("path", type=Path)
+        # ``rules`` is a catalog export and takes no file path.
+        if operation == "rules":
+            sub.add_argument(
+                "rule_id",
+                nargs="?",
+                help="Optional rule_id to explain (e.g. vasp.incar.invalid_tag).",
+            )
+        else:
+            sub.add_argument("path", type=Path)
         sub.add_argument("--format", choices=["json"], default="json")
         sub.add_argument(
             "--line",
@@ -275,6 +309,10 @@ def main(argv: list[str] | None = None) -> int:
         payload = with_capabilities(check_path(args.path), "check")
         print(json.dumps(payload, indent=2, sort_keys=True))
         return 1 if getattr(args, "fail_on_blocking", False) and not payload["ok"] else 0
+    if args.operation == "rules":
+        payload = rules_payload(getattr(args, "rule_id", None))
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
     payload = _operation_payload(args.path, args.operation, args.line, args.character)
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 0

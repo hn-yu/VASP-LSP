@@ -1,0 +1,8 @@
+# Invalid INCAR fixture for vasp.incar.invalid_tag
+# FOOBAZ is not part of the upstream INCAR schema
+# (https://www.vasp.at/wiki/index.php/INCAR) and must surface
+# vasp.incar.invalid_tag at error severity.
+ENCUT = 520
+FOOBAZ = 123
+ISMEAR = 0
+SIGMA = 0.05

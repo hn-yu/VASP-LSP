@@ -1,0 +1,84 @@
+"""Focused fixture/golden test for the vasp.incar.invalid_tag rule (#51).
+
+This test is the single source of truth for the rule's stable identity,
+severity, range, category, source, and fix hint. The golden file lives next
+to the fixtures so OpenQC and other consumers can read the same contract:
+
+- ``tests/fixtures/rules/invalid_incar_tag/INCAR``      -> invalid fixture
+- ``tests/fixtures/rules/invalid_incar_tag/valid_INCAR`` -> valid non-triggering fixture
+- ``tests/fixtures/rules/invalid_incar_tag.json``       -> golden assertions
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any, Dict
+
+from vasp_lsp.features.diagnostics import DiagnosticsProvider
+from vasp_lsp.rich_diagnostics import diagnostic_to_dict
+from vasp_lsp.rules import RULES_MANIFEST, get_rule
+
+FIXTURE_DIR = Path(__file__).parent / "fixtures" / "rules" / "invalid_incar_tag"
+GOLDEN_PATH = Path(__file__).parent / "fixtures" / "rules" / "invalid_incar_tag.json"
+
+RULE_ID = "vasp.incar.invalid_tag"
+
+
+def _load_golden() -> Dict[str, Any]:
+    loaded = json.loads(GOLDEN_PATH.read_text(encoding="utf-8"))
+    assert isinstance(loaded, dict), f"golden must be a JSON object, got {type(loaded)!r}"
+    return loaded
+
+
+def _check_fixture(fixture_path: Path) -> list[dict]:
+    provider = DiagnosticsProvider()
+    text = fixture_path.read_text(encoding="utf-8")
+    diagnostics = provider.get_diagnostics(text, fixture_path.resolve().as_uri(), {})
+    return [
+        diagnostic_to_dict(d, software="vasp", path=str(fixture_path), file_type="INCAR")
+        for d in diagnostics
+    ]
+
+
+def test_rule_is_registered_in_manifest() -> None:
+    """The rule must be exported by the rule manifest at error severity."""
+    assert RULE_ID in RULES_MANIFEST
+    rule = get_rule(RULE_ID)
+    assert rule is not None
+    assert rule["rule_id"] == RULE_ID
+    assert rule["severity"] == "error"
+    assert rule["category"] == "schema"
+    assert rule["software"] == "vasp"
+    assert rule["source"] == "official"
+
+
+def test_invalid_fixture_emits_exactly_this_rule() -> None:
+    """The invalid fixture must produce exactly one vasp.incar.invalid_tag diagnostic."""
+    golden = _load_golden()
+    items = _check_fixture(FIXTURE_DIR / "INCAR")
+
+    matching = [item for item in items if item["code"] == RULE_ID]
+    assert (
+        len(matching) == 1
+    ), f"expected exactly one {RULE_ID} diagnostic, got codes={[i['code'] for i in items]}"
+    item = matching[0]
+
+    assert item["severity"] == golden["severity"]
+    assert item["category"] == golden["category"]
+    assert item["confidence"] == golden["confidence"]
+    assert item["source"] == golden["source"]
+    assert item["manual_ref"] == golden["manual_ref"]
+    assert golden["message_contains"] in item["message"]
+    assert item["range"] == golden["range"]
+    assert any(
+        golden["fix_hints_contains"] in hint for hint in item["fix_hints"]
+    ), f"fix_hints missing {golden['fix_hints_contains']!r}: {item['fix_hints']}"
+    assert item["blocking"] is golden["blocking"]
+
+
+def test_valid_fixture_does_not_trigger_rule() -> None:
+    """A valid INCAR must not emit vasp.incar.invalid_tag."""
+    items = _check_fixture(FIXTURE_DIR / "valid_INCAR")
+    matching = [item for item in items if item["code"] == RULE_ID]
+    assert matching == [], f"valid fixture unexpectedly emitted {RULE_ID}: {matching}"

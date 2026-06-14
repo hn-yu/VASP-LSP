@@ -267,15 +267,16 @@ class TestDiagnostics:
     """Tests for diagnostic publication on INCAR files."""
 
     def test_unknown_tag_diagnostic(self, server: _CaptureServer) -> None:
-        """Unknown INCAR tags produce a warning diagnostic."""
+        """Unknown INCAR tags produce a vasp.incar.invalid_tag error diagnostic."""
         content = "FAKETAG = 123"
         text_document_did_open(_make_did_open(INCAR_URI, content))
 
         diags = server.published_diagnostics[INCAR_URI]
         matching = [d for d in diags if "Unknown INCAR tag" in d.message]
         assert len(matching) >= 1
-        assert matching[0].severity == DiagnosticSeverity.Warning
+        assert matching[0].severity == DiagnosticSeverity.Error
         assert matching[0].source == "vasp-lsp"
+        assert matching[0].code == "vasp.incar.invalid_tag"
 
     def test_type_mismatch_diagnostic(self, server: _CaptureServer) -> None:
         """Type mismatch produces an error diagnostic."""

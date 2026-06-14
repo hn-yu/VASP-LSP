@@ -1,0 +1,25 @@
+{
+  "rule_id": "vasp.incar.invalid_tag",
+  "software": "vasp",
+  "file_type": "INCAR",
+  "severity": "error",
+  "category": "schema",
+  "confidence": 1.0,
+  "source": "vasp-lsp",
+  "manual_ref": "https://www.vasp.at/wiki/index.php/INCAR",
+  "invalid_fixture": "tests/fixtures/rules/invalid_incar_tag/INCAR",
+  "valid_fixture": "tests/fixtures/rules/invalid_incar_tag/valid_INCAR",
+  "message_contains": "Unknown INCAR tag: FOOBAZ",
+  "range": {
+    "start": {
+      "line": 5,
+      "character": 0
+    },
+    "end": {
+      "line": 5,
+      "character": 6
+    }
+  },
+  "fix_hints_contains": "valid INCAR tag",
+  "blocking": true
+}
