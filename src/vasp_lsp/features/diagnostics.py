@@ -17,6 +17,7 @@ from ..parsers.vasp_log_parser import VASPLogDiagnostic, VASPLogParser
 from ..rules import (
     INVALID_INCAR_TAG,
     INVALID_INCAR_VALUE,
+    SMEARING_ISMEAR_SIGMA_MISMATCH,
     SPIN_MISSING_MAGMOM,
     get_rule_fix_hint,
 )
@@ -356,6 +357,68 @@ class DiagnosticsProvider:
             },
         )
 
+    def _ismear_sigma_missing_diagnostic(self, ismear) -> Diagnostic:
+        """Build the vasp.smearing.ismear_sigma_mismatch diagnostic for ISMEAR >= 0 without SIGMA.
+
+        For Gaussian / Methfessel-Paxton smearing (ISMEAR >= 0) SIGMA sets the
+        width; leaving it unset falls back to the VASP default of 0.2 eV. The
+        range underlines the whole ISMEAR assignment (the keyword the user must
+        reconcile with a SIGMA entry). Rule metadata (category, confidence,
+        manual_ref, fix_hint) travels on ``Diagnostic.data`` so the
+        agent-facing rich JSON contract surfaces it.
+        """
+        line_index = ismear.line_number - 1
+        line_end = max(len(ismear.raw_line), 1)
+        fix_hint = get_rule_fix_hint(SMEARING_ISMEAR_SIGMA_MISMATCH["rule_id"])
+        return Diagnostic(
+            range=Range(
+                start=Position(line=line_index, character=0),
+                end=Position(line=line_index, character=line_end),
+            ),
+            message="ISMEAR >= 0 should have SIGMA set. Default SIGMA=0.2 may not be appropriate.",
+            severity=DiagnosticSeverity.Warning,
+            source="vasp-lsp",
+            code=SMEARING_ISMEAR_SIGMA_MISMATCH["rule_id"],
+            data={
+                "category": SMEARING_ISMEAR_SIGMA_MISMATCH["category"],
+                "confidence": SMEARING_ISMEAR_SIGMA_MISMATCH["confidence"],
+                "manual_ref": SMEARING_ISMEAR_SIGMA_MISMATCH["manual_ref"],
+                "fix_hints": [fix_hint] if fix_hint else [],
+            },
+        )
+
+    def _ismear_sigma_unused_diagnostic(self, sigma) -> Diagnostic:
+        """Build the vasp.smearing.ismear_sigma_mismatch diagnostic for SIGMA set with ISMEAR < 0.
+
+        For the tetrahedron method (ISMEAR < 0) SIGMA is unused, so declaring
+        it is misleading. The range underlines the whole SIGMA assignment (the
+        keyword the user should reconcile or remove). Rule metadata (category,
+        confidence, manual_ref, fix_hint) travels on ``Diagnostic.data`` so the
+        agent-facing rich JSON contract surfaces it.
+        """
+        line_index = sigma.line_number - 1
+        line_end = max(len(sigma.raw_line), 1)
+        fix_hint = get_rule_fix_hint(SMEARING_ISMEAR_SIGMA_MISMATCH["rule_id"])
+        return Diagnostic(
+            range=Range(
+                start=Position(line=line_index, character=0),
+                end=Position(line=line_index, character=line_end),
+            ),
+            message=(
+                "SIGMA is set but ISMEAR < 0 (tetrahedron method). "
+                "SIGMA is not used with the tetrahedron method."
+            ),
+            severity=DiagnosticSeverity.Warning,
+            source="vasp-lsp",
+            code=SMEARING_ISMEAR_SIGMA_MISMATCH["rule_id"],
+            data={
+                "category": SMEARING_ISMEAR_SIGMA_MISMATCH["category"],
+                "confidence": SMEARING_ISMEAR_SIGMA_MISMATCH["confidence"],
+                "manual_ref": SMEARING_ISMEAR_SIGMA_MISMATCH["manual_ref"],
+                "fix_hints": [fix_hint] if fix_hint else [],
+            },
+        )
+
     def _validate_incar_value(self, tag, param, content) -> List[Diagnostic]:
         """Validate a single INCAR parameter value against schema metadata.
 
@@ -562,26 +625,17 @@ class DiagnosticsProvider:
         """Check for parameter dependencies and conflicts."""
         diagnostics = []
 
-        # Check ISMEAR and SIGMA relationship
+        # Check ISMEAR and SIGMA relationship -> vasp.smearing.ismear_sigma_mismatch (#54).
+        # For ISMEAR >= 0 (Gaussian / Methfessel-Paxton) SIGMA sets the smearing
+        # width; without it VASP falls back to the 0.2 eV default, which is rarely
+        # the intended width. Upstream behavior, not a hard runtime failure, so the
+        # rule ships at warning severity with the rule's stable code and metadata.
         ismear = parser.get_parameter("ISMEAR")
         sigma = parser.get_parameter("SIGMA")
 
         if ismear and not sigma:
             if isinstance(ismear.value, int) and ismear.value >= 0:
-                diagnostics.append(
-                    Diagnostic(
-                        range=Range(
-                            start=Position(line=ismear.line_number - 1, character=0),
-                            end=Position(
-                                line=ismear.line_number - 1,
-                                character=len(ismear.raw_line),
-                            ),
-                        ),
-                        message="ISMEAR >= 0 should have SIGMA set. Default SIGMA=0.2 may not be appropriate.",
-                        severity=DiagnosticSeverity.Information,
-                        source="vasp-lsp",
-                    )
-                )
+                diagnostics.append(self._ismear_sigma_missing_diagnostic(ismear))
 
         # Check NCORE and NPAR conflict
         ncore = parser.get_parameter("NCORE")
@@ -659,15 +713,11 @@ class DiagnosticsProvider:
         if ispin and isinstance(ispin.value, int) and ispin.value == 2 and not magmom:
             diagnostics.append(self._spin_missing_magmom_diagnostic(ispin))
 
-        # Check ISMEAR=-5 (tetrahedron) with SIGMA set
+        # Check ISMEAR=-5 (tetrahedron) with SIGMA set -> same rule (#54):
+        # the tetrahedron method does not use SIGMA, so a stray SIGMA entry is a
+        # mismatch. Warning severity with the rule's stable code and metadata.
         if ismear and isinstance(ismear.value, int) and ismear.value < 0 and sigma:
-            diagnostics.append(
-                self._parameter_info(
-                    sigma,
-                    "SIGMA is set but ISMEAR < 0 (tetrahedron method). "
-                    "SIGMA is not used with the tetrahedron method.",
-                )
-            )
+            diagnostics.append(self._ismear_sigma_unused_diagnostic(sigma))
 
         # Check LCHARG with ICHARG conflict
         lcharg = parser.get_parameter("LCHARG")

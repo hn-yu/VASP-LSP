@@ -1,0 +1,14 @@
+# Valid INCAR fixture: every tag below is part of the upstream
+# INCAR schema (https://www.vasp.at/wiki/index.php/INCAR). ISMEAR = 0
+# (Gaussian smearing) is paired with an explicit SIGMA width
+# (https://www.vasp.at/wiki/index.php/SIGMA), so the ISMEAR/SIGMA pair is
+# consistent and this file must NOT emit vasp.smearing.ismear_sigma_mismatch.
+SYSTEM = valid-value-fixture
+ENCUT = 520
+ISPIN = 2
+MAGMOM = 2*1.0
+ISMEAR = 0
+SIGMA = 0.05
+EDIFF = 1E-6
+ALGO = Normal
+NSW = 100

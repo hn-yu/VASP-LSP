@@ -44,6 +44,17 @@
       "summary": "Reports spin-polarized calculations (ISPIN=2) that do not declare an initial set of magnetic moments via MAGMOM. Without MAGMOM, VASP defaults the moments to unity, which almost always indicates a forgotten keyword in a spin workflow.",
       "manual_ref": "https://www.vasp.at/wiki/index.php/MAGMOM",
       "fix_hint": "Add a MAGMOM tag matching your species/atom counts (see https://www.vasp.at/wiki/index.php/MAGMOM), or set ISPIN=1 if the calculation is not meant to be spin-polarized."
+    },
+    {
+      "rule_id": "vasp.smearing.ismear_sigma_mismatch",
+      "software": "vasp",
+      "severity": "warning",
+      "category": "semantic consistency",
+      "confidence": 0.9,
+      "source": "official",
+      "summary": "Reports an inconsistency between ISMEAR and SIGMA. For ISMEAR >= 0 (Gaussian or Methfessel-Paxton smearing) SIGMA sets the smearing width and should be declared explicitly; for ISMEAR < 0 (tetrahedron method) SIGMA is unused and should be omitted. A mismatch almost always indicates a forgotten or stray keyword in the smearing setup.",
+      "manual_ref": "https://www.vasp.at/wiki/index.php/ISMEAR",
+      "fix_hint": "Pair ISMEAR with an explicit SIGMA width for ISMEAR >= 0 (see https://www.vasp.at/wiki/index.php/SIGMA), or remove SIGMA when ISMEAR < 0 selects the tetrahedron method."
     }
   ]
 }

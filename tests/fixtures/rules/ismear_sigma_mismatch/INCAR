@@ -1,0 +1,9 @@
+# Invalid INCAR fixture for vasp.smearing.ismear_sigma_mismatch
+# ISMEAR = 0 (Gaussian smearing) selects a smearing method whose width is
+# governed by SIGMA (https://www.vasp.at/wiki/index.php/ISMEAR and
+# https://www.vasp.at/wiki/index.php/SIGMA). Omitting SIGMA leaves the
+# width at the VASP default (0.2 eV), which is rarely appropriate for
+# metals or semiconductors and almost always indicates a forgotten
+# keyword, so this must surface vasp.smearing.ismear_sigma_mismatch at
+# warning severity, underlining the ISMEAR line.
+ISMEAR = 0

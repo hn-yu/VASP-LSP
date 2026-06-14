@@ -125,11 +125,42 @@ SPIN_MISSING_MAGMOM = _rule(
     ),
 )
 
+#: vasp.smearing.ismear_sigma_mismatch — warn when the ISMEAR/SIGMA pair is
+#: inconsistent. For ISMEAR >= 0 (Gaussian / Methfessel-Paxton smearing) the
+#: smearing width is governed by SIGMA; leaving SIGMA unset falls back to the
+#: VASP default of 0.2 eV, which is rarely the intended width. For ISMEAR < 0
+#: (tetrahedron method) SIGMA is unused, so setting it is misleading. Both are
+#: upstream-behavior mismatches rather than hard runtime failures, so the rule
+#: ships at ``warning`` severity per the OpenQC severity policy. Upstream
+#: references: https://www.vasp.at/wiki/index.php/ISMEAR and
+#: https://www.vasp.at/wiki/index.php/SIGMA
+SMEARING_ISMEAR_SIGMA_MISMATCH = _rule(
+    rule_id="vasp.smearing.ismear_sigma_mismatch",
+    severity="warning",
+    category="semantic consistency",
+    confidence=0.9,
+    summary=(
+        "Reports an inconsistency between ISMEAR and SIGMA. For ISMEAR >= 0 "
+        "(Gaussian or Methfessel-Paxton smearing) SIGMA sets the smearing "
+        "width and should be declared explicitly; for ISMEAR < 0 (tetrahedron "
+        "method) SIGMA is unused and should be omitted. A mismatch almost "
+        "always indicates a forgotten or stray keyword in the smearing setup."
+    ),
+    manual_ref="https://www.vasp.at/wiki/index.php/ISMEAR",
+    source="official",
+    fix_hint=(
+        "Pair ISMEAR with an explicit SIGMA width for ISMEAR >= 0 "
+        "(see https://www.vasp.at/wiki/index.php/SIGMA), or remove SIGMA "
+        "when ISMEAR < 0 selects the tetrahedron method."
+    ),
+)
+
 #: Ordered registry of all first-class rules exported by VASP-LSP.
 RULES_MANIFEST: Dict[str, Dict[str, Any]] = {
     INVALID_INCAR_TAG["rule_id"]: INVALID_INCAR_TAG,
     INVALID_INCAR_VALUE["rule_id"]: INVALID_INCAR_VALUE,
     SPIN_MISSING_MAGMOM["rule_id"]: SPIN_MISSING_MAGMOM,
+    SMEARING_ISMEAR_SIGMA_MISMATCH["rule_id"]: SMEARING_ISMEAR_SIGMA_MISMATCH,
 }
 
 

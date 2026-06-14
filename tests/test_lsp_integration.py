@@ -298,15 +298,15 @@ class TestDiagnostics:
         errors = [d for d in diags if d.severity == DiagnosticSeverity.Error]
         assert errors == []
 
-    def test_missing_sigma_information(self, server: _CaptureServer) -> None:
-        """ISMEAR >= 0 without SIGMA produces an informational diagnostic."""
+    def test_missing_sigma_warning(self, server: _CaptureServer) -> None:
+        """ISMEAR >= 0 without SIGMA produces a vasp.smearing.ismear_sigma_mismatch warning."""
         content = "ISMEAR = 1"
         text_document_did_open(_make_did_open(INCAR_URI, content))
 
         diags = server.published_diagnostics[INCAR_URI]
         matching = [d for d in diags if "SIGMA" in d.message and "ISMEAR" in d.message]
         assert len(matching) >= 1
-        assert matching[0].severity == DiagnosticSeverity.Information
+        assert matching[0].severity == DiagnosticSeverity.Warning
 
     def test_ncore_npar_conflict(self, server: _CaptureServer) -> None:
         """Setting both NCORE and NPAR produces a warning."""
