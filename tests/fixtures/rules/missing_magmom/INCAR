@@ -1,0 +1,8 @@
+# Invalid INCAR fixture for vasp.spin.missing_magmom
+# ISPIN=2 selects a spin-polarized calculation, which requires an initial
+# set of magnetic moments via MAGMOM
+# (https://www.vasp.at/wiki/index.php/MAGMOM). Omitting MAGMOM leaves the
+# moments defaulted to unity and almost always indicates a forgotten
+# keyword in a spin workflow, so this must surface
+# vasp.spin.missing_magmom at warning severity, underlining the ISPIN line.
+ISPIN = 2

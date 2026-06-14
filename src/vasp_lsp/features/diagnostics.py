@@ -14,7 +14,12 @@ from ..parsers.kpoints_parser import KPOINTSMode, KPOINTSParser
 from ..parsers.poscar_parser import POSCARParser
 from ..parsers.potcar_parser import POTCARParser
 from ..parsers.vasp_log_parser import VASPLogDiagnostic, VASPLogParser
-from ..rules import INVALID_INCAR_TAG, INVALID_INCAR_VALUE, get_rule_fix_hint
+from ..rules import (
+    INVALID_INCAR_TAG,
+    INVALID_INCAR_VALUE,
+    SPIN_MISSING_MAGMOM,
+    get_rule_fix_hint,
+)
 from ..schemas.incar_tags import CALCULATION_MODES, CalculationMode, get_tag_info
 
 
@@ -323,6 +328,34 @@ class DiagnosticsProvider:
             },
         )
 
+    def _spin_missing_magmom_diagnostic(self, ispin) -> Diagnostic:
+        """Build the vasp.spin.missing_magmom diagnostic for ISPIN=2 without MAGMOM.
+
+        The range underlines the whole ISPIN assignment (the keyword the user
+        must reconcile with a MAGMOM entry). Rule metadata (category,
+        confidence, manual_ref, fix_hint) travels on ``Diagnostic.data`` so
+        the agent-facing rich JSON contract surfaces it.
+        """
+        line_index = ispin.line_number - 1
+        line_end = max(len(ispin.raw_line), 1)
+        fix_hint = get_rule_fix_hint(SPIN_MISSING_MAGMOM["rule_id"])
+        return Diagnostic(
+            range=Range(
+                start=Position(line=line_index, character=0),
+                end=Position(line=line_index, character=line_end),
+            ),
+            message="ISPIN=2 (spin-polarized) should have MAGMOM set for initial magnetic moments.",
+            severity=DiagnosticSeverity.Warning,
+            source="vasp-lsp",
+            code=SPIN_MISSING_MAGMOM["rule_id"],
+            data={
+                "category": SPIN_MISSING_MAGMOM["category"],
+                "confidence": SPIN_MISSING_MAGMOM["confidence"],
+                "manual_ref": SPIN_MISSING_MAGMOM["manual_ref"],
+                "fix_hints": [fix_hint] if fix_hint else [],
+            },
+        )
+
     def _validate_incar_value(self, tag, param, content) -> List[Diagnostic]:
         """Validate a single INCAR parameter value against schema metadata.
 
@@ -615,22 +648,16 @@ class DiagnosticsProvider:
             if not parser.get_parameter("PRECFOCK"):
                 pass  # Has default
 
-        # Check spin-polarization and MAGMOM
+        # Check spin-polarization and MAGMOM -> vasp.spin.missing_magmom (#53).
+        # A spin-polarized workflow (ISPIN=2) needs an initial set of magnetic
+        # moments via MAGMOM; without it VASP defaults the moments to unity.
+        # Upstream behavior, not a hard runtime failure, so the rule ships at
+        # warning severity with the rule's stable code and metadata.
         ispin = parser.get_parameter("ISPIN")
         magmom = parser.get_parameter("MAGMOM")
 
         if ispin and isinstance(ispin.value, int) and ispin.value == 2 and not magmom:
-            diagnostics.append(
-                Diagnostic(
-                    range=Range(
-                        start=Position(line=ispin.line_number - 1, character=0),
-                        end=Position(line=ispin.line_number - 1, character=len(ispin.raw_line)),
-                    ),
-                    message="ISPIN=2 (spin-polarized) should have MAGMOM set for initial magnetic moments.",
-                    severity=DiagnosticSeverity.Information,
-                    source="vasp-lsp",
-                )
-            )
+            diagnostics.append(self._spin_missing_magmom_diagnostic(ispin))
 
         # Check ISMEAR=-5 (tetrahedron) with SIGMA set
         if ismear and isinstance(ismear.value, int) and ismear.value < 0 and sigma:

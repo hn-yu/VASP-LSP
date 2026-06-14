@@ -99,10 +99,37 @@ INVALID_INCAR_VALUE = _rule(
     ),
 )
 
+#: vasp.spin.missing_magmom — warn when a spin-polarized workflow (ISPIN=2)
+#: is selected without a MAGMOM tag. VASP defaults missing moments to unity,
+#: which silently changes the intended magnetic state, so the rule ships at
+#: ``warning`` severity per the OpenQC severity policy (upstream behavior,
+#: not a hard runtime failure). Upstream reference:
+#: https://www.vasp.at/wiki/index.php/MAGMOM
+SPIN_MISSING_MAGMOM = _rule(
+    rule_id="vasp.spin.missing_magmom",
+    severity="warning",
+    category="semantic consistency",
+    confidence=0.9,
+    summary=(
+        "Reports spin-polarized calculations (ISPIN=2) that do not declare "
+        "an initial set of magnetic moments via MAGMOM. Without MAGMOM, "
+        "VASP defaults the moments to unity, which almost always indicates "
+        "a forgotten keyword in a spin workflow."
+    ),
+    manual_ref="https://www.vasp.at/wiki/index.php/MAGMOM",
+    source="official",
+    fix_hint=(
+        "Add a MAGMOM tag matching your species/atom counts "
+        "(see https://www.vasp.at/wiki/index.php/MAGMOM), or set ISPIN=1 "
+        "if the calculation is not meant to be spin-polarized."
+    ),
+)
+
 #: Ordered registry of all first-class rules exported by VASP-LSP.
 RULES_MANIFEST: Dict[str, Dict[str, Any]] = {
     INVALID_INCAR_TAG["rule_id"]: INVALID_INCAR_TAG,
     INVALID_INCAR_VALUE["rule_id"]: INVALID_INCAR_VALUE,
+    SPIN_MISSING_MAGMOM["rule_id"]: SPIN_MISSING_MAGMOM,
 }
 
 

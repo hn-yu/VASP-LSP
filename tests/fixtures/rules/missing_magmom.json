@@ -1,0 +1,25 @@
+{
+  "rule_id": "vasp.spin.missing_magmom",
+  "software": "vasp",
+  "file_type": "INCAR",
+  "severity": "warning",
+  "category": "semantic consistency",
+  "confidence": 0.9,
+  "source": "vasp-lsp",
+  "manual_ref": "https://www.vasp.at/wiki/index.php/MAGMOM",
+  "invalid_fixture": "tests/fixtures/rules/missing_magmom/INCAR",
+  "valid_fixture": "tests/fixtures/rules/missing_magmom/valid_INCAR",
+  "message_contains": "MAGMOM",
+  "range": {
+    "start": {
+      "line": 7,
+      "character": 0
+    },
+    "end": {
+      "line": 7,
+      "character": 9
+    }
+  },
+  "fix_hints_contains": "MAGMOM",
+  "blocking": false
+}

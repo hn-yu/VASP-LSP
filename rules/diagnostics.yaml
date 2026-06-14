@@ -33,6 +33,17 @@
       "summary": "Reports INCAR tags whose value does not match the tag's declared type (e.g. a non-numeric string where the upstream schema expects an integer or float, or a string where a boolean is required). Such values are rejected or silently misinterpreted by VASP.",
       "manual_ref": "https://www.vasp.at/wiki/index.php/INCAR",
       "fix_hint": "Replace the value with one matching the tag's declared type (see https://www.vasp.at/wiki/index.php/INCAR)."
+    },
+    {
+      "rule_id": "vasp.spin.missing_magmom",
+      "software": "vasp",
+      "severity": "warning",
+      "category": "semantic consistency",
+      "confidence": 0.9,
+      "source": "official",
+      "summary": "Reports spin-polarized calculations (ISPIN=2) that do not declare an initial set of magnetic moments via MAGMOM. Without MAGMOM, VASP defaults the moments to unity, which almost always indicates a forgotten keyword in a spin workflow.",
+      "manual_ref": "https://www.vasp.at/wiki/index.php/MAGMOM",
+      "fix_hint": "Add a MAGMOM tag matching your species/atom counts (see https://www.vasp.at/wiki/index.php/MAGMOM), or set ISPIN=1 if the calculation is not meant to be spin-polarized."
     }
   ]
 }
