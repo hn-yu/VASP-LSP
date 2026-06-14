@@ -55,6 +55,17 @@
       "summary": "Reports an inconsistency between ISMEAR and SIGMA. For ISMEAR >= 0 (Gaussian or Methfessel-Paxton smearing) SIGMA sets the smearing width and should be declared explicitly; for ISMEAR < 0 (tetrahedron method) SIGMA is unused and should be omitted. A mismatch almost always indicates a forgotten or stray keyword in the smearing setup.",
       "manual_ref": "https://www.vasp.at/wiki/index.php/ISMEAR",
       "fix_hint": "Pair ISMEAR with an explicit SIGMA width for ISMEAR >= 0 (see https://www.vasp.at/wiki/index.php/SIGMA), or remove SIGMA when ISMEAR < 0 selects the tetrahedron method."
+    },
+    {
+      "rule_id": "vasp.encut.below_enmax",
+      "software": "vasp",
+      "severity": "warning",
+      "category": "semantic consistency",
+      "confidence": 0.9,
+      "source": "official",
+      "summary": "Reports an INCAR ENCUT value below the maximum ENMAX found in the neighbouring POTCAR evidence. Each pseudopotential dataset is shipped with a recommended plane-wave cutoff (ENMAX); running ENCUT below the largest of these degrades the basis set the pseudopotentials were balanced for and almost always indicates a too-low cutoff for the calculation.",
+      "manual_ref": "https://www.vasp.at/wiki/index.php/ENCUT",
+      "fix_hint": "Raise ENCUT to at least the largest POTCAR ENMAX (see https://www.vasp.at/wiki/index.php/ENCUT), or ~1.3 x ENMAX for production accuracy."
     }
   ]
 }

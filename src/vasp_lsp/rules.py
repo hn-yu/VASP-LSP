@@ -155,12 +155,43 @@ SMEARING_ISMEAR_SIGMA_MISMATCH = _rule(
     ),
 )
 
+#: vasp.encut.below_enmax — warn when the INCAR ENCUT is below the largest
+#: ENMAX found in the neighbouring POTCAR evidence. Each pseudopotential
+#: dataset ships with a recommended plane-wave cutoff (ENMAX); running below
+#: the largest of these degrades the basis set the pseudopotentials were
+#: balanced for. This is an upstream-behavior mismatch rather than a hard
+#: runtime failure, so the rule ships at ``warning`` severity per the OpenQC
+#: severity policy. Upstream reference:
+#: https://www.vasp.at/wiki/index.php/ENCUT
+ENCUT_BELOW_ENMAX = _rule(
+    rule_id="vasp.encut.below_enmax",
+    severity="warning",
+    category="semantic consistency",
+    confidence=0.9,
+    summary=(
+        "Reports an INCAR ENCUT value below the maximum ENMAX found in the "
+        "neighbouring POTCAR evidence. Each pseudopotential dataset is shipped "
+        "with a recommended plane-wave cutoff (ENMAX); running ENCUT below the "
+        "largest of these degrades the basis set the pseudopotentials were "
+        "balanced for and almost always indicates a too-low cutoff for the "
+        "calculation."
+    ),
+    manual_ref="https://www.vasp.at/wiki/index.php/ENCUT",
+    source="official",
+    fix_hint=(
+        "Raise ENCUT to at least the largest POTCAR ENMAX "
+        "(see https://www.vasp.at/wiki/index.php/ENCUT), or ~1.3 x ENMAX for "
+        "production accuracy."
+    ),
+)
+
 #: Ordered registry of all first-class rules exported by VASP-LSP.
 RULES_MANIFEST: Dict[str, Dict[str, Any]] = {
     INVALID_INCAR_TAG["rule_id"]: INVALID_INCAR_TAG,
     INVALID_INCAR_VALUE["rule_id"]: INVALID_INCAR_VALUE,
     SPIN_MISSING_MAGMOM["rule_id"]: SPIN_MISSING_MAGMOM,
     SMEARING_ISMEAR_SIGMA_MISMATCH["rule_id"]: SMEARING_ISMEAR_SIGMA_MISMATCH,
+    ENCUT_BELOW_ENMAX["rule_id"]: ENCUT_BELOW_ENMAX,
 }
 
 

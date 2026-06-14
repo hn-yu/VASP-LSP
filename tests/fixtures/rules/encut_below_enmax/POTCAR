@@ -1,0 +1,7 @@
+# Minimal POTCAR evidence for vasp.encut.below_enmax
+# A single Si pseudopotential dataset whose ENMAX (245.345 eV) exceeds the
+# INCAR ENCUT in the neighbouring INCAR fixture. Only the title line and the
+# ENMAX/ENMIN evidence are needed by the POTCAR parser.
+PAW_PBE Si 05Jan2001
+   4.00000000
+ENMAX =  245.345; ENMIN =  143.678

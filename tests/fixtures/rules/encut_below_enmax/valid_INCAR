@@ -1,0 +1,9 @@
+# Valid INCAR fixture: ENCUT (520 eV) is at or above the maximum POTCAR
+# ENMAX (245.345 eV) in the neighbouring valid_POTCAR evidence, so this must
+# NOT emit vasp.encut.below_enmax.
+SYSTEM = valid-value-fixture
+ENCUT = 520
+ISMEAR = 0
+SIGMA = 0.05
+EDIFF = 1E-6
+NSW = 100

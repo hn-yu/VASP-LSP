@@ -15,6 +15,7 @@ from ..parsers.poscar_parser import POSCARParser
 from ..parsers.potcar_parser import POTCARParser
 from ..parsers.vasp_log_parser import VASPLogDiagnostic, VASPLogParser
 from ..rules import (
+    ENCUT_BELOW_ENMAX,
     INVALID_INCAR_TAG,
     INVALID_INCAR_VALUE,
     SMEARING_ISMEAR_SIGMA_MISMATCH,
@@ -415,6 +416,37 @@ class DiagnosticsProvider:
                 "category": SMEARING_ISMEAR_SIGMA_MISMATCH["category"],
                 "confidence": SMEARING_ISMEAR_SIGMA_MISMATCH["confidence"],
                 "manual_ref": SMEARING_ISMEAR_SIGMA_MISMATCH["manual_ref"],
+                "fix_hints": [fix_hint] if fix_hint else [],
+            },
+        )
+
+    def _encut_below_enmax_diagnostic(self, encut, max_enmax: float) -> Diagnostic:
+        """Build the vasp.encut.below_enmax diagnostic for ENCUT < max POTCAR ENMAX.
+
+        Each pseudopotential dataset is shipped with a recommended plane-wave
+        cutoff (ENMAX); running ENCUT below the largest ENMAX degrades the
+        basis set the pseudopotentials were balanced for. The range underlines
+        the whole ENCUT assignment (the keyword the user should reconcile with
+        the POTCAR evidence). Rule metadata (category, confidence, manual_ref,
+        fix_hint) travels on ``Diagnostic.data`` so the agent-facing rich JSON
+        contract surfaces it.
+        """
+        line_index = encut.line_number - 1
+        line_end = max(len(encut.raw_line), 1)
+        fix_hint = get_rule_fix_hint(ENCUT_BELOW_ENMAX["rule_id"])
+        return Diagnostic(
+            range=Range(
+                start=Position(line=line_index, character=0),
+                end=Position(line=line_index, character=line_end),
+            ),
+            message=f"ENCUT={encut.value:g} is below max POTCAR ENMAX={max_enmax:g} eV.",
+            severity=DiagnosticSeverity.Warning,
+            source="vasp-lsp",
+            code=ENCUT_BELOW_ENMAX["rule_id"],
+            data={
+                "category": ENCUT_BELOW_ENMAX["category"],
+                "confidence": ENCUT_BELOW_ENMAX["confidence"],
+                "manual_ref": ENCUT_BELOW_ENMAX["manual_ref"],
                 "fix_hints": [fix_hint] if fix_hint else [],
             },
         )
@@ -871,12 +903,12 @@ class DiagnosticsProvider:
             if enmax_values:
                 max_enmax = max(enmax_values)
                 if float(encut.value) < max_enmax:
-                    diagnostics.append(
-                        self._parameter_warning(
-                            encut,
-                            f"ENCUT={encut.value:g} is below max POTCAR ENMAX={max_enmax:g} eV.",
-                        )
-                    )
+                    # ENCUT below the largest POTCAR ENMAX -> vasp.encut.below_enmax (#55).
+                    # Each pseudopotential is shipped with a recommended cutoff (ENMAX); running
+                    # below it degrades the basis set the pseudopotentials were balanced for.
+                    # Upstream behavior, not a hard runtime failure, so the rule ships at warning
+                    # severity with the rule's stable code and metadata.
+                    diagnostics.append(self._encut_below_enmax_diagnostic(encut, max_enmax))
                 elif float(encut.value) < 1.3 * max_enmax:
                     recommended = round(1.3 * max_enmax)
                     diagnostics.append(

@@ -1,0 +1,7 @@
+# Invalid INCAR fixture for vasp.encut.below_enmax
+# ENCUT = 200 eV is below the largest ENMAX found in the neighbouring POTCAR
+# evidence (245.345 eV for the Si pseudopotential below). Running below the
+# pseudopotential cutoff degrades the basis set that VASP ships the
+# pseudopotential for, so this must surface vasp.encut.below_enmax at warning
+# severity, underlining the ENCUT line.
+ENCUT = 200

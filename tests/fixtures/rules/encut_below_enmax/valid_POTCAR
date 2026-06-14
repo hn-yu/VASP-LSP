@@ -1,0 +1,5 @@
+# Minimal POTCAR evidence paired with the valid INCAR. The ENMAX (245.345 eV)
+# is below the INCAR ENCUT (520 eV), so vasp.encut.below_enmax must not fire.
+PAW_PBE Si 05Jan2001
+   4.00000000
+ENMAX =  245.345; ENMIN =  143.678

@@ -1,0 +1,27 @@
+{
+  "rule_id": "vasp.encut.below_enmax",
+  "software": "vasp",
+  "file_type": "INCAR",
+  "severity": "warning",
+  "category": "semantic consistency",
+  "confidence": 0.9,
+  "source": "vasp-lsp",
+  "manual_ref": "https://www.vasp.at/wiki/index.php/ENCUT",
+  "invalid_fixture": "tests/fixtures/rules/encut_below_enmax/INCAR",
+  "invalid_potcar": "tests/fixtures/rules/encut_below_enmax/POTCAR",
+  "valid_fixture": "tests/fixtures/rules/encut_below_enmax/valid_INCAR",
+  "valid_potcar": "tests/fixtures/rules/encut_below_enmax/valid_POTCAR",
+  "message_contains": "ENMAX",
+  "range": {
+    "start": {
+      "line": 6,
+      "character": 0
+    },
+    "end": {
+      "line": 6,
+      "character": 11
+    }
+  },
+  "fix_hints_contains": "ENCUT",
+  "blocking": false
+}
