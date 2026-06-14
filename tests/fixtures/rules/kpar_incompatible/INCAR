@@ -1,0 +1,15 @@
+# Invalid INCAR fixture for vasp.parallel.kpar_incompatible
+# KPAR (https://www.vasp.at/wiki/index.php/KPAR) parallelizes over
+# k-points, while NCORE (https://www.vasp.at/wiki/index.php/NCORE)
+# parallelizes over bands/orbitals. The two operate on different MPI
+# partitioning axes: KPAR splits the MPI ranks into k-point groups, and
+# NCORE then governs how the remaining ranks within each group share a
+# single orbital. Declaring both KPAR > 1 and NCORE > 1 without an
+# externally-supplied total MPI rank count leaves the combined layout
+# undefined and is the canonical incompatible parallelization
+# combination documented on the VASP wiki. This must surface
+# vasp.parallel.kpar_incompatible at warning severity, underlining the
+# NCORE line (the band-parallelism flag the user should reconcile with
+# the k-point parallelization).
+KPAR = 4
+NCORE = 4

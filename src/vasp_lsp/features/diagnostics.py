@@ -18,6 +18,7 @@ from ..rules import (
     ENCUT_BELOW_ENMAX,
     INVALID_INCAR_TAG,
     INVALID_INCAR_VALUE,
+    PARALLEL_KPAR_INCOMPATIBLE,
     PARALLEL_NCORE_NPAR_CONFLICT,
     SMEARING_ISMEAR_SIGMA_MISMATCH,
     SPIN_MISSING_MAGMOM,
@@ -485,6 +486,43 @@ class DiagnosticsProvider:
             },
         )
 
+    def _kpar_incompatible_diagnostic(self, band_param, band_name: str) -> Diagnostic:
+        """Build the vasp.parallel.kpar_incompatible diagnostic.
+
+        KPAR partitions the MPI ranks into k-point groups while NCORE/NPAR
+        partition the remaining ranks within each group over bands/orbitals;
+        the two flag families operate on different MPI partitioning axes, so
+        declaring KPAR > 1 together with a band-level flag (NCORE > 1 or
+        NPAR > 1) leaves the combined layout undefined. The range underlines
+        the whole band-parallelism assignment (the keyword the user should
+        reconcile with the k-point parallelization). Rule metadata travels on
+        ``Diagnostic.data`` so the agent-facing rich JSON contract surfaces it.
+        The message keeps both ``KPAR`` and the band flag substring so
+        quickfixes still anchor on this diagnostic.
+        """
+        line_index = band_param.line_number - 1
+        line_end = max(len(band_param.raw_line), 1)
+        fix_hint = get_rule_fix_hint(PARALLEL_KPAR_INCOMPATIBLE["rule_id"])
+        return Diagnostic(
+            range=Range(
+                start=Position(line=line_index, character=0),
+                end=Position(line=line_index, character=line_end),
+            ),
+            message=(
+                f"KPAR and {band_name} operate on different parallelization "
+                f"axes and should not be set together."
+            ),
+            severity=DiagnosticSeverity.Warning,
+            source="vasp-lsp",
+            code=PARALLEL_KPAR_INCOMPATIBLE["rule_id"],
+            data={
+                "category": PARALLEL_KPAR_INCOMPATIBLE["category"],
+                "confidence": PARALLEL_KPAR_INCOMPATIBLE["confidence"],
+                "manual_ref": PARALLEL_KPAR_INCOMPATIBLE["manual_ref"],
+                "fix_hints": [fix_hint] if fix_hint else [],
+            },
+        )
+
     def _validate_incar_value(self, tag, param, content) -> List[Diagnostic]:
         """Validate a single INCAR parameter value against schema metadata.
 
@@ -717,6 +755,36 @@ class DiagnosticsProvider:
 
         if ncore and npar:
             diagnostics.append(self._ncore_npar_conflict_diagnostic(npar))
+
+        # Check KPAR combined with a band-level parallelization flag ->
+        # vasp.parallel.kpar_incompatible (#57). KPAR partitions the MPI ranks
+        # into k-point groups, while NCORE/NPAR partition the remaining ranks
+        # within each group over bands/orbitals; the two flag families operate
+        # on different MPI partitioning axes, so declaring KPAR > 1 together
+        # with a band-level flag (NCORE > 1 or NPAR > 1) leaves the combined
+        # layout undefined. Upstream behavior, not a hard runtime failure, so
+        # the rule ships at warning severity with the rule's stable code and
+        # metadata. The diagnostic anchors on the band-parallelism flag (the
+        # keyword the user should reconcile with the k-point parallelization);
+        # NCORE is preferred over NPAR as the anchor when both are present,
+        # since NCORE is the recommended band-level flag.
+        kpar = parser.get_parameter("KPAR")
+        if kpar and isinstance(kpar.value, int) and kpar.value > 1:
+            kpar_band_param = None
+            kpar_band_name: Optional[str] = None
+            ncore_value = self._integer_param_value(ncore) if ncore else None
+            if ncore and ncore_value is not None and ncore_value > 1:
+                kpar_band_param = ncore
+                kpar_band_name = "NCORE"
+            else:
+                npar_value = self._integer_param_value(npar) if npar else None
+                if npar and npar_value is not None and npar_value > 1:
+                    kpar_band_param = npar
+                    kpar_band_name = "NPAR"
+            if kpar_band_param is not None and kpar_band_name is not None:
+                diagnostics.append(
+                    self._kpar_incompatible_diagnostic(kpar_band_param, kpar_band_name)
+                )
 
         # Check LDAU requirements
         ldau = parser.get_parameter("LDAU")

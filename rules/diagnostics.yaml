@@ -77,6 +77,17 @@
       "summary": "Reports INCAR files that declare both NCORE and NPAR. The two flags are mutually-exclusive parallelism controls: NCORE sets the number of cores working on a single orbital and NPAR sets the number of parallel band groups; VASP derives one from the other, so declaring both is contradictory and almost always indicates a copy-paste from two different parallelization recipes.",
       "manual_ref": "https://www.vasp.at/wiki/index.php/NCORE",
       "fix_hint": "Remove NPAR and keep NCORE for parallelization control (see https://www.vasp.at/wiki/index.php/NCORE and https://www.vasp.at/wiki/index.php/NPAR); VASP derives NPAR from NCORE automatically."
+    },
+    {
+      "rule_id": "vasp.parallel.kpar_incompatible",
+      "software": "vasp",
+      "severity": "warning",
+      "category": "semantic consistency",
+      "confidence": 0.9,
+      "source": "official",
+      "summary": "Reports INCAR files that combine KPAR > 1 with a band-level parallelization flag (NCORE > 1 or NPAR > 1). KPAR partitions the MPI ranks into k-point groups while NCORE/NPAR partition the remaining ranks within each group over bands/orbitals; the two flag families operate on different MPI partitioning axes, so declaring both leaves the combined layout undefined and almost always indicates a copy-paste from two different parallelization recipes.",
+      "manual_ref": "https://www.vasp.at/wiki/index.php/KPAR",
+      "fix_hint": "Pick a single parallelization axis: keep KPAR for k-point parallelization and drop the band-level flag, or remove KPAR and keep NCORE for band parallelization (see https://www.vasp.at/wiki/index.php/KPAR and https://www.vasp.at/wiki/index.php/NCORE)."
     }
   ]
 }

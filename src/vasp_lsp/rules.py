@@ -218,6 +218,43 @@ PARALLEL_NCORE_NPAR_CONFLICT = _rule(
     ),
 )
 
+#: vasp.parallel.kpar_incompatible — warn when KPAR > 1 is combined with a
+#: band-level parallelization flag (NCORE > 1 or NPAR > 1) in INCAR. KPAR
+#: partitions the MPI ranks into k-point groups, while NCORE/NPAR govern how
+#: the remaining ranks within each group share a band/orbital; the two flag
+#: families operate on different MPI partitioning axes, so declaring both
+#: leaves the combined layout undefined without an externally-supplied total
+#: MPI rank count. This is the canonical incompatible parallelization
+#: combination documented on the VASP wiki. Upstream behavior, not a hard
+#: runtime failure, so the rule ships at ``warning`` severity per the OpenQC
+#: severity policy. Upstream references:
+#: https://www.vasp.at/wiki/index.php/KPAR and
+#: https://www.vasp.at/wiki/index.php/NCORE
+PARALLEL_KPAR_INCOMPATIBLE = _rule(
+    rule_id="vasp.parallel.kpar_incompatible",
+    severity="warning",
+    category="semantic consistency",
+    confidence=0.9,
+    summary=(
+        "Reports INCAR files that combine KPAR > 1 with a band-level "
+        "parallelization flag (NCORE > 1 or NPAR > 1). KPAR partitions the MPI "
+        "ranks into k-point groups while NCORE/NPAR partition the remaining "
+        "ranks within each group over bands/orbitals; the two flag families "
+        "operate on different MPI partitioning axes, so declaring both leaves "
+        "the combined layout undefined and almost always indicates a "
+        "copy-paste from two different parallelization recipes."
+    ),
+    manual_ref="https://www.vasp.at/wiki/index.php/KPAR",
+    source="official",
+    fix_hint=(
+        "Pick a single parallelization axis: keep KPAR for k-point "
+        "parallelization and drop the band-level flag, or remove KPAR and "
+        "keep NCORE for band parallelization "
+        "(see https://www.vasp.at/wiki/index.php/KPAR and "
+        "https://www.vasp.at/wiki/index.php/NCORE)."
+    ),
+)
+
 #: Ordered registry of all first-class rules exported by VASP-LSP.
 RULES_MANIFEST: Dict[str, Dict[str, Any]] = {
     INVALID_INCAR_TAG["rule_id"]: INVALID_INCAR_TAG,
@@ -226,6 +263,7 @@ RULES_MANIFEST: Dict[str, Dict[str, Any]] = {
     SMEARING_ISMEAR_SIGMA_MISMATCH["rule_id"]: SMEARING_ISMEAR_SIGMA_MISMATCH,
     ENCUT_BELOW_ENMAX["rule_id"]: ENCUT_BELOW_ENMAX,
     PARALLEL_NCORE_NPAR_CONFLICT["rule_id"]: PARALLEL_NCORE_NPAR_CONFLICT,
+    PARALLEL_KPAR_INCOMPATIBLE["rule_id"]: PARALLEL_KPAR_INCOMPATIBLE,
 }
 
 

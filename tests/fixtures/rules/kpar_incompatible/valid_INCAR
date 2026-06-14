@@ -1,0 +1,8 @@
+# Valid INCAR fixture for vasp.parallel.kpar_incompatible
+# Only KPAR (k-point parallelization) is set; no band-level
+# parallelization flag (NCORE/NPAR) competes for the same MPI ranks, so
+# this combination is safe and must NOT trigger the rule.
+KPAR = 4
+ENCUT = 520
+ISMEAR = 0
+SIGMA = 0.05
