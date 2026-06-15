@@ -2,6 +2,15 @@
 
 All notable changes to the VASP-LSP project will be documented in this file.
 
+## [0.4.4] - 2026-06-15
+
+### Added
+- VERSION file for release version discoverability
+- Release provenance metadata in lsp-capabilities.json
+
+### Changed
+- Aligned version across pyproject.toml, VERSION, and CHANGELOG
+
 ## [0.4.3] - 2026-03-04
 
 ### Added

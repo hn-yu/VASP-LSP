@@ -7,6 +7,7 @@
   "languageId": "vasp",
   "executable": "vasp-lsp",
   "defaultBranch": "main",
+  "releaseVersion": "0.4.4",
   "filePatterns": [
     "INCAR",
     "POSCAR",
@@ -144,6 +145,16 @@
       "kind": "versioned_rules",
       "label": "Diagnostic rule catalog",
       "path": "rules/diagnostics.yaml"
+    },
+    {
+      "kind": "release_version",
+      "label": "Release version file",
+      "path": "VERSION"
+    },
+    {
+      "kind": "changelog",
+      "label": "Project changelog",
+      "path": "CHANGELOG.md"
     }
   ]
 }

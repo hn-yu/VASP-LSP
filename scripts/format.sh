@@ -25,7 +25,7 @@ if [ -f Cargo.toml ]; then
 fi
 
 if [ -f pyproject.toml ] || [ -f setup.py ]; then
-  py_targets="$(python_format_targets)"
+  py_targets="src tests"
   if "$PYTHON_BIN" -m black --version >/dev/null 2>&1; then
     "$PYTHON_BIN" -m black $py_targets
     ran=1
