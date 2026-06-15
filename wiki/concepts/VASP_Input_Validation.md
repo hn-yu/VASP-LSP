@@ -2,7 +2,7 @@
 
 > Type: concept
 > Domain: VASP input preparation
-> Sources: `raw/assets/examples__INCAR`, `raw/assets/examples__KPOINTS`, `raw/assets/examples__POSCAR`, `raw/assets/docs__DIAGNOSTIC_ENGINE_V1.md`
+> Sources: `rules/diagnostics.yaml`, `tests/fixtures/valid/`, `tests/fixtures/invalid/`
 
 ## Definition
 
@@ -16,3 +16,9 @@ Agents should treat diagnostics as actionable feedback, apply minimal fixes, and
 
 - [[VASP_LSP]]
 - [[Agent_Workflow]]
+
+## Sources
+
+- https://www.vasp.at/wiki/index.php/INCAR — upstream INCAR schema
+- `tests/fixtures/rules/` — per-rule valid/invalid goldens with provenance
+- `raw/assets/asset-manifest.json` — captured docs and rule digest metadata

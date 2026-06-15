@@ -1,0 +1,149 @@
+{
+  "schema": "OpenQCLspCapabilities",
+  "version": 1,
+  "id": "vasp-lsp",
+  "software": "vasp",
+  "displayName": "VASP",
+  "languageId": "vasp",
+  "executable": "vasp-lsp",
+  "defaultBranch": "main",
+  "filePatterns": [
+    "INCAR",
+    "POSCAR",
+    "KPOINTS",
+    "POTCAR",
+    "CONTCAR",
+    "*.out"
+  ],
+  "maturity": "preview",
+  "blockingPolicy": {
+    "mode": "warning-only",
+    "description": "Blocking errors stop agent run-gates; warnings are advisory with confidence and manual references."
+  },
+  "capabilities": [
+    "agent-envelope",
+    "agent-json-cli",
+    "completion",
+    "diagnostic-engine-v1",
+    "diagnostics",
+    "document-formatting",
+    "document-symbols",
+    "fix-preview",
+    "hover",
+    "manifest",
+    "openqc-context",
+    "output-log-diagnostics",
+    "rich-diagnostics",
+    "routing",
+    "source-provenance",
+    "symbols"
+  ],
+  "agentCli": {
+    "command": "vasp-lsp-tool",
+    "operations": [
+      "check",
+      "context",
+      "complete",
+      "hover",
+      "symbols",
+      "fix",
+      "rules",
+      "describe",
+      "schema",
+      "section",
+      "examples",
+      "next-tokens",
+      "explain"
+    ],
+    "jsonFormat": true,
+    "failOnBlocking": true
+  },
+  "diagnosticSchema": "rules/diagnostics.yaml",
+  "validationBackends": [
+    {
+      "id": "vasp-lsp-tool-static",
+      "kind": "open_source",
+      "mode": "static",
+      "status": "available",
+      "operations": [
+        "check",
+        "context",
+        "complete",
+        "hover",
+        "symbols",
+        "fix",
+        "rules"
+      ],
+      "command": [
+        "vasp-lsp-tool",
+        "check"
+      ],
+      "notes": "Local INCAR/POSCAR/KPOINTS parser and DiagnosticEnvelope/v1 checks."
+    },
+    {
+      "id": "vasp-log-parser",
+      "kind": "open_source",
+      "mode": "log",
+      "status": "available",
+      "operations": [
+        "explain"
+      ],
+      "command": [
+        "vasp-lsp-explain"
+      ],
+      "notes": "Runtime log diagnostics via vasp-lsp-explain / PLAN24 explain envelope."
+    }
+  ],
+  "wikiPaths": {
+    "rawAssets": "raw/assets",
+    "entities": "wiki/entities",
+    "concepts": "wiki/concepts",
+    "synthesis": "wiki/synthesis",
+    "index": "wiki/entities/VASP_LSP.md"
+  },
+  "fixturePaths": {
+    "valid": [
+      "tests/fixtures/valid"
+    ],
+    "invalid": [
+      "tests/fixtures/invalid"
+    ],
+    "logs": [
+      "tests/fixtures/logs"
+    ]
+  },
+  "outputLogPatterns": [
+    "OUTCAR",
+    "vasp.out",
+    "*.out",
+    "slurm-*.out"
+  ],
+  "openqc": {
+    "registryId": "vasp-lsp",
+    "repoName": "VASP-LSP",
+    "contextContract": "DSLAuthoringContext",
+    "diagnosticEnvelope": "DiagnosticEnvelope/v1"
+  },
+  "sourceProvenance": [
+    {
+      "kind": "official_docs",
+      "label": "VASP manual hub",
+      "url": "https://www.vasp.at/wiki/index.php/The_VASP_Manual"
+    },
+    {
+      "kind": "official_docs",
+      "label": "INCAR reference",
+      "url": "https://www.vasp.at/wiki/index.php/INCAR"
+    },
+    {
+      "kind": "upstream_manifest",
+      "label": "Upstream VASP reference links",
+      "path": "raw/assets/upstream-vasp-reference.md"
+    },
+    {
+      "kind": "versioned_rules",
+      "label": "Diagnostic rule catalog",
+      "path": "rules/diagnostics.yaml"
+    }
+  ]
+}

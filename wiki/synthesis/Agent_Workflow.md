@@ -1,7 +1,7 @@
 # Agent_Workflow
 
 > Created: 2026-06-12
-> Sources: `raw/assets/docs__DIAGNOSTIC_ENGINE_V1.md`, `raw/assets/README.md`
+> Sources: `lsp-capabilities.json`, `vasp-lsp-tool`, `scripts/wiki_lint.py`
 
 ## Core Workflow
 
@@ -14,3 +14,9 @@
 
 - [[VASP_LSP]]
 - [[VASP_Input_Validation]]
+
+## Sources
+
+- `vasp-lsp-tool check|rules|explain` — agent JSON CLI (`DiagnosticEnvelope/v1`)
+- `tests/fixtures/valid/` and `tests/fixtures/invalid/` — closed-loop gate fixtures
+- `python scripts/wiki_lint.py` — provenance and manifest refresh verifier

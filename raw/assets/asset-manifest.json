@@ -1,0 +1,28 @@
+{
+  "manifest_version": 1,
+  "software": "vasp",
+  "generated_at": "2026-06-15T00:00:00Z",
+  "refresh_command": "python scripts/wiki_lint.py && vasp-lsp-tool rules --format json",
+  "pipeline": "official-docs -> raw/assets -> wiki/entities+concepts+synthesis -> rules/diagnostics.yaml -> fixtures/eval -> LSP runtime/OpenQC",
+  "assets": [
+    {
+      "path": "raw/assets/upstream-vasp-reference.md",
+      "kind": "official_docs_index",
+      "url": "https://www.vasp.at/wiki/index.php/The_VASP_Manual",
+      "retrieved_at": "2026-06-15",
+      "software_version": "6.x",
+      "license_note": "Link-only index; canonical content remains upstream.",
+      "sha256": "d9b94bf973a31d8b56819a3cd426a34ed5a1af35b50958d51b53dbc280967436",
+      "size_bytes": 1402
+    },
+    {
+      "path": "rules/diagnostics.yaml",
+      "kind": "versioned_rules",
+      "url": "https://www.vasp.at/wiki/index.php/INCAR",
+      "retrieved_at": "2026-06-15",
+      "software_version": "6.x",
+      "license_note": "Published Diagnostic Engine v1 rule catalog exported from src/vasp_lsp/rules.py.",
+      "path_note": "Machine-readable rule IDs, severity, manual_ref, and fix hints."
+    }
+  ]
+}
