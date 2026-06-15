@@ -1,0 +1,408 @@
+{
+  "schemaVersion": "openqc.lsp.traceability.v1",
+  "serverId": "vasp-lsp",
+  "repository": "newtontech/VASP-LSP",
+  "languageId": "vasp-input",
+  "generatedAt": "2026-06-15T00:00:00Z",
+  "summary": {
+    "docstringsTotal": 45,
+    "docstringsLinked": 45,
+    "wikiPagesTotal": 3,
+    "rawAssetsTotal": 10,
+    "ruleIdsTotal": 10,
+    "brokenWikiLinks": 0,
+    "wikiSourcesWithoutRaw": 0,
+    "rawManifestFailures": 0
+  },
+  "docstrings": [
+    {
+      "path": "src/vasp_lsp/__init__.py",
+      "symbol": "__init__",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "VASP Language Server Protocol implementation."
+    },
+    {
+      "path": "src/vasp_lsp/agent_lsp.py",
+      "symbol": "agent_lsp",
+      "wikiPath": "wiki/concepts/VASP_Input_Validation.md",
+      "docstring": "Small Python API wrapper around the Diagnostic Engine v1 CLI contract."
+    },
+    {
+      "path": "src/vasp_lsp/agent_lsp.py",
+      "symbol": "agent_lsp",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "Small Python API wrapper around the Diagnostic Engine v1 CLI contract."
+    },
+    {
+      "path": "src/vasp_lsp/agent_lsp.py",
+      "symbol": "agent_lsp",
+      "wikiPath": "wiki/synthesis/Agent_Workflow.md",
+      "docstring": "Small Python API wrapper around the Diagnostic Engine v1 CLI contract."
+    },
+    {
+      "path": "src/vasp_lsp/agent_operations.py",
+      "symbol": "agent_operations",
+      "wikiPath": "wiki/concepts/VASP_Input_Validation.md",
+      "docstring": "Shared agent-facing operations for Diagnostic Engine v1 CLIs."
+    },
+    {
+      "path": "src/vasp_lsp/agent_operations.py",
+      "symbol": "agent_operations",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "Shared agent-facing operations for Diagnostic Engine v1 CLIs."
+    },
+    {
+      "path": "src/vasp_lsp/agent_operations.py",
+      "symbol": "agent_operations",
+      "wikiPath": "wiki/synthesis/Agent_Workflow.md",
+      "docstring": "Shared agent-facing operations for Diagnostic Engine v1 CLIs."
+    },
+    {
+      "path": "src/vasp_lsp/dsl_description.py",
+      "symbol": "dsl_description",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "VASP DSL description API for coding agents (#29, #30, #31, #26)."
+    },
+    {
+      "path": "src/vasp_lsp/dsl_description.py",
+      "symbol": "dsl_description",
+      "wikiPath": "wiki/synthesis/Agent_Workflow.md",
+      "docstring": "VASP DSL description API for coding agents (#29, #30, #31, #26)."
+    },
+    {
+      "path": "src/vasp_lsp/features/__init__.py",
+      "symbol": "__init__",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "LSP features implementation."
+    },
+    {
+      "path": "src/vasp_lsp/features/completion.py",
+      "symbol": "completion",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "Completion provider for VASP-LSP."
+    },
+    {
+      "path": "src/vasp_lsp/features/diagnostics.py",
+      "symbol": "diagnostics",
+      "wikiPath": "wiki/concepts/VASP_Input_Validation.md",
+      "docstring": "Diagnostics provider for VASP-LSP."
+    },
+    {
+      "path": "src/vasp_lsp/features/diagnostics.py",
+      "symbol": "diagnostics",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "Diagnostics provider for VASP-LSP."
+    },
+    {
+      "path": "src/vasp_lsp/features/formatting.py",
+      "symbol": "formatting",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "Formatting provider for VASP-LSP."
+    },
+    {
+      "path": "src/vasp_lsp/features/hover.py",
+      "symbol": "hover",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "Hover documentation provider for VASP-LSP."
+    },
+    {
+      "path": "src/vasp_lsp/features/navigation.py",
+      "symbol": "navigation",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "Document symbols provider for VASP-LSP."
+    },
+    {
+      "path": "src/vasp_lsp/features/quickfixes.py",
+      "symbol": "quickfixes",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "Quick fixes provider for VASP-LSP."
+    },
+    {
+      "path": "src/vasp_lsp/parsers/__init__.py",
+      "symbol": "__init__",
+      "wikiPath": "wiki/concepts/VASP_Input_Validation.md",
+      "docstring": "VASP file parsers."
+    },
+    {
+      "path": "src/vasp_lsp/parsers/__init__.py",
+      "symbol": "__init__",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "VASP file parsers."
+    },
+    {
+      "path": "src/vasp_lsp/parsers/incar_parser.py",
+      "symbol": "incar_parser",
+      "wikiPath": "wiki/concepts/VASP_Input_Validation.md",
+      "docstring": "INCAR file parser for VASP-LSP."
+    },
+    {
+      "path": "src/vasp_lsp/parsers/incar_parser.py",
+      "symbol": "incar_parser",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "INCAR file parser for VASP-LSP."
+    },
+    {
+      "path": "src/vasp_lsp/parsers/kpoints_parser.py",
+      "symbol": "kpoints_parser",
+      "wikiPath": "wiki/concepts/VASP_Input_Validation.md",
+      "docstring": "KPOINTS file parser for VASP-LSP."
+    },
+    {
+      "path": "src/vasp_lsp/parsers/kpoints_parser.py",
+      "symbol": "kpoints_parser",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "KPOINTS file parser for VASP-LSP."
+    },
+    {
+      "path": "src/vasp_lsp/parsers/poscar_parser.py",
+      "symbol": "poscar_parser",
+      "wikiPath": "wiki/concepts/VASP_Input_Validation.md",
+      "docstring": "POSCAR file parser for VASP-LSP."
+    },
+    {
+      "path": "src/vasp_lsp/parsers/poscar_parser.py",
+      "symbol": "poscar_parser",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "POSCAR file parser for VASP-LSP."
+    },
+    {
+      "path": "src/vasp_lsp/parsers/potcar_parser.py",
+      "symbol": "potcar_parser",
+      "wikiPath": "wiki/concepts/VASP_Input_Validation.md",
+      "docstring": "POTCAR parser for cross-file VASP diagnostics."
+    },
+    {
+      "path": "src/vasp_lsp/parsers/potcar_parser.py",
+      "symbol": "potcar_parser",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "POTCAR parser for cross-file VASP diagnostics."
+    },
+    {
+      "path": "src/vasp_lsp/parsers/vasp_log_parser.py",
+      "symbol": "vasp_log_parser",
+      "wikiPath": "wiki/concepts/VASP_Input_Validation.md",
+      "docstring": "Parser for VASP runtime logs such as OUTCAR, stdout, stderr, and slurm logs."
+    },
+    {
+      "path": "src/vasp_lsp/parsers/vasp_log_parser.py",
+      "symbol": "vasp_log_parser",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "Parser for VASP runtime logs such as OUTCAR, stdout, stderr, and slurm logs."
+    },
+    {
+      "path": "src/vasp_lsp/rich_diagnostics.py",
+      "symbol": "rich_diagnostics",
+      "wikiPath": "wiki/concepts/VASP_Input_Validation.md",
+      "docstring": "Diagnostic Engine v1 serialization helpers."
+    },
+    {
+      "path": "src/vasp_lsp/rich_diagnostics.py",
+      "symbol": "rich_diagnostics",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "Diagnostic Engine v1 serialization helpers."
+    },
+    {
+      "path": "src/vasp_lsp/rich_diagnostics.py",
+      "symbol": "rich_diagnostics",
+      "wikiPath": "wiki/synthesis/Agent_Workflow.md",
+      "docstring": "Diagnostic Engine v1 serialization helpers."
+    },
+    {
+      "path": "src/vasp_lsp/rules.py",
+      "symbol": "rules",
+      "wikiPath": "wiki/concepts/VASP_Input_Validation.md",
+      "docstring": "Rule manifest registry for VASP-LSP (Diagnostic Engine v1)."
+    },
+    {
+      "path": "src/vasp_lsp/rules.py",
+      "symbol": "rules",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "Rule manifest registry for VASP-LSP (Diagnostic Engine v1)."
+    },
+    {
+      "path": "src/vasp_lsp/rules.py",
+      "symbol": "rules",
+      "wikiPath": "wiki/synthesis/Agent_Workflow.md",
+      "docstring": "Rule manifest registry for VASP-LSP (Diagnostic Engine v1)."
+    },
+    {
+      "path": "src/vasp_lsp/schemas/__init__.py",
+      "symbol": "__init__",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "VASP parameter schemas and metadata."
+    },
+    {
+      "path": "src/vasp_lsp/schemas/incar_tags.py",
+      "symbol": "incar_tags",
+      "wikiPath": "wiki/concepts/VASP_Input_Validation.md",
+      "docstring": "VASP INCAR tag definitions with metadata."
+    },
+    {
+      "path": "src/vasp_lsp/schemas/incar_tags.py",
+      "symbol": "incar_tags",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "VASP INCAR tag definitions with metadata."
+    },
+    {
+      "path": "src/vasp_lsp/schemas/vasp_error_patterns.py",
+      "symbol": "vasp_error_patterns",
+      "wikiPath": "wiki/concepts/VASP_Input_Validation.md",
+      "docstring": "Runtime VASP error pattern registry."
+    },
+    {
+      "path": "src/vasp_lsp/schemas/vasp_error_patterns.py",
+      "symbol": "vasp_error_patterns",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "Runtime VASP error pattern registry."
+    },
+    {
+      "path": "src/vasp_lsp/server.py",
+      "symbol": "server",
+      "wikiPath": "wiki/concepts/VASP_Input_Validation.md",
+      "docstring": "Main LSP server for VASP input files."
+    },
+    {
+      "path": "src/vasp_lsp/server.py",
+      "symbol": "server",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "Main LSP server for VASP input files."
+    },
+    {
+      "path": "src/vasp_lsp/tool.py",
+      "symbol": "tool",
+      "wikiPath": "wiki/concepts/VASP_Input_Validation.md",
+      "docstring": "Agent-facing CLI for Diagnostic Engine v1 operations."
+    },
+    {
+      "path": "src/vasp_lsp/tool.py",
+      "symbol": "tool",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "Agent-facing CLI for Diagnostic Engine v1 operations."
+    },
+    {
+      "path": "src/vasp_lsp/tool.py",
+      "symbol": "tool",
+      "wikiPath": "wiki/synthesis/Agent_Workflow.md",
+      "docstring": "Agent-facing CLI for Diagnostic Engine v1 operations."
+    }
+  ],
+  "wikiSources": [
+    {
+      "wikiPath": "wiki/synthesis/Agent_Workflow.md",
+      "rawPath": "raw/assets/docs__user-guide.md",
+      "sourceUrl": "repo:raw/assets/docs__user-guide.md"
+    },
+    {
+      "wikiPath": "wiki/synthesis/Agent_Workflow.md",
+      "rawPath": "raw/assets/docs__validation-contract.md",
+      "sourceUrl": "repo:raw/assets/docs__validation-contract.md"
+    },
+    {
+      "wikiPath": "wiki/concepts/VASP_Input_Validation.md",
+      "rawPath": "raw/assets/asset-manifest.json",
+      "sourceUrl": "repo:raw/assets/asset-manifest.json"
+    },
+    {
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "rawPath": "raw/assets/README.md",
+      "sourceUrl": "repo:raw/assets/README.md"
+    },
+    {
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "rawPath": "raw/assets/asset-manifest.json",
+      "sourceUrl": "repo:raw/assets/asset-manifest.json"
+    },
+    {
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "rawPath": "raw/assets/upstream-vasp-reference.md",
+      "sourceUrl": "https://www.vasp.at/wiki/index.php/The_VASP_Manual"
+    }
+  ],
+  "ruleIds": [
+    {
+      "dottedId": "vasp.encut.below_enmax",
+      "code": "VASP-INCAR-SEMANTIC-003",
+      "sourcePath": "src/vasp_lsp/rules.py",
+      "fileRole": "INCAR",
+      "category": "SEMANTIC"
+    },
+    {
+      "dottedId": "vasp.incar.invalid_tag",
+      "code": "VASP-INCAR-SCHEMA-001",
+      "sourcePath": "src/vasp_lsp/rules.py",
+      "fileRole": "INCAR",
+      "category": "SCHEMA"
+    },
+    {
+      "dottedId": "vasp.incar.invalid_value",
+      "code": "VASP-INCAR-SCHEMA-002",
+      "sourcePath": "src/vasp_lsp/rules.py",
+      "fileRole": "INCAR",
+      "category": "SCHEMA"
+    },
+    {
+      "dottedId": "vasp.log.electronic_minimization_failed",
+      "code": "VASP-LOG-RUNTIME-002",
+      "sourcePath": "src/vasp_lsp/rules.py",
+      "fileRole": "LOG",
+      "category": "RUNTIME"
+    },
+    {
+      "dottedId": "vasp.log.symmetry_failure",
+      "code": "VASP-LOG-RUNTIME-001",
+      "sourcePath": "src/vasp_lsp/rules.py",
+      "fileRole": "LOG",
+      "category": "RUNTIME"
+    },
+    {
+      "dottedId": "vasp.parallel.kpar_incompatible",
+      "code": "VASP-INCAR-SEMANTIC-005",
+      "sourcePath": "src/vasp_lsp/rules.py",
+      "fileRole": "INCAR",
+      "category": "SEMANTIC"
+    },
+    {
+      "dottedId": "vasp.parallel.ncore_npar_conflict",
+      "code": "VASP-INCAR-SEMANTIC-004",
+      "sourcePath": "src/vasp_lsp/rules.py",
+      "fileRole": "INCAR",
+      "category": "SEMANTIC"
+    },
+    {
+      "dottedId": "vasp.restart.file_mismatch",
+      "code": "VASP-INCAR-SEMANTIC-006",
+      "sourcePath": "src/vasp_lsp/rules.py",
+      "fileRole": "INCAR",
+      "category": "SEMANTIC"
+    },
+    {
+      "dottedId": "vasp.smearing.ismear_sigma_mismatch",
+      "code": "VASP-INCAR-SEMANTIC-002",
+      "sourcePath": "src/vasp_lsp/rules.py",
+      "fileRole": "INCAR",
+      "category": "SEMANTIC"
+    },
+    {
+      "dottedId": "vasp.spin.missing_magmom",
+      "code": "VASP-INCAR-SEMANTIC-001",
+      "sourcePath": "src/vasp_lsp/rules.py",
+      "fileRole": "INCAR",
+      "category": "SEMANTIC"
+    }
+  ],
+  "sourceUrls": [
+    {
+      "rawPath": "raw/assets/upstream-vasp-reference.md",
+      "url": "https://www.vasp.at/wiki/index.php/The_VASP_Manual"
+    },
+    {
+      "rawPath": "rules/diagnostics.yaml",
+      "url": "https://www.vasp.at/wiki/index.php/INCAR"
+    }
+  ],
+  "rawManifest": {
+    "path": "raw/assets/asset-manifest.json",
+    "ok": true,
+    "assetCount": 10
+  }
+}
