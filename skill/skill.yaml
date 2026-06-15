@@ -1,0 +1,37 @@
+schema: scientific-lsp-skill/v1
+name: vasp
+software: vasp
+display_name: VASP
+description: VASP input preflight for INCAR, POSCAR, KPOINTS, and related generated inputs.
+package:
+  name: vasp-lsp
+  install: pip install vasp-lsp
+entrypoints:
+  server: vasp-lsp
+  tool: vasp-lsp-tool
+file_patterns:
+  - INCAR
+  - POSCAR
+  - KPOINTS
+  - POTCAR
+  - CONTCAR
+  - OSZICAR
+  - OUTCAR
+  - vasprun.xml
+operations:
+  - capabilities
+  - check
+  - context
+  - complete
+  - hover
+  - symbols
+  - fix
+diagnostic_contract: DiagnosticEnvelope/v1
+blocking_policy:
+  mode: warning-only
+  description: Use --fail-on-blocking when generated inputs must be launch-ready.
+source_provenance:
+  -
+    kind: official_docs
+    label: VASP INCAR wiki
+    url: https://www.vasp.at/wiki/INCAR

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "vasp-lsp"
-version = "0.4.4"
+version = "0.4.5rc1"
 description = "Language Server Protocol for VASP input files"
 readme = "README.md"
 license = {text = "MIT"}
@@ -47,6 +47,10 @@ vasp-lsp-explain = "vasp_lsp.tool:explain_main"
 vasp-lsp-describe = "vasp_lsp.tool:describe_main"
 vasp-lsp-schema = "vasp_lsp.tool:schema_main"
 vasp-lsp-examples = "vasp_lsp.tool:examples_main"
+
+
+[tool.hatch.build.force-include]
+"skill" = "skill"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/vasp_lsp"]

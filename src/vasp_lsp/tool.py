@@ -10,10 +10,10 @@ from typing import Any
 from . import dsl_description
 from .agent_operations import operation_path, with_capabilities
 from .rich_diagnostics import agent_check_payload, diagnostic_to_dict
+from .skill_export import export_skill, skill_spec_text
 
 SOFTWARE = "vasp"
 PLAN24_SCHEMA_VERSION = "vasp-lsp.plan24.v1"
-
 
 def _file_type(path: Path) -> str:
     name = path.name.upper()
@@ -23,13 +23,11 @@ def _file_type(path: Path) -> str:
         return path.suffix.lstrip(".").lower()
     return name.lower()
 
-
 def _collect_diagnostics(path: Path) -> list[Any]:
     from .features.diagnostics import DiagnosticsProvider
 
     text = path.read_text(encoding="utf-8")
     return list(DiagnosticsProvider().get_diagnostics(text, path.resolve().as_uri(), {}))
-
 
 def check_path(path: Path) -> dict[str, Any]:
     uri = path.resolve().as_uri()
@@ -44,7 +42,6 @@ def check_path(path: Path) -> dict[str, Any]:
             file_type=_file_type(path),
         )
     )
-
 
 def rules_payload(rule_id: str | None = None) -> dict[str, Any]:
     """Build the rules-export payload for OpenQC and other catalog consumers.
@@ -71,18 +68,15 @@ def rules_payload(rule_id: str | None = None) -> dict[str, Any]:
     payload["rule_count"] = len(RULES_MANIFEST)
     return with_capabilities(payload, "rules")
 
-
 def check_target(path: Path) -> dict[str, Any]:
     """Build the PLAN24 JSON payload for an input file or calculation directory."""
     diagnostics_by_path = _collect_plan24_check_diagnostics(path)
     return _plan24_payload("check", [path], diagnostics_by_path)
 
-
 def explain_logs(paths: list[Path], workdir: Path | None = None) -> dict[str, Any]:
     """Build the PLAN24 JSON payload for one or more runtime logs."""
     diagnostics_by_path = _collect_plan24_explain_diagnostics(paths, workdir)
     return _plan24_payload("explain", paths, diagnostics_by_path)
-
 
 def _collect_plan24_check_diagnostics(path: Path) -> list[tuple[Path, list[Any]]]:
     from .features.diagnostics import DiagnosticsProvider
@@ -126,7 +120,6 @@ def _collect_plan24_check_diagnostics(path: Path) -> list[tuple[Path, list[Any]]
         )
     ]
 
-
 def _collect_plan24_explain_diagnostics(
     paths: list[Path], workdir: Path | None = None
 ) -> list[tuple[Path, list[Any]]]:
@@ -150,7 +143,6 @@ def _collect_plan24_explain_diagnostics(
         )
     return results
 
-
 def _workspace_documents(directory: Path) -> dict[str, str]:
     if not directory.exists() or not directory.is_dir():
         return {}
@@ -160,10 +152,8 @@ def _workspace_documents(directory: Path) -> dict[str, str]:
             documents[path.resolve().as_uri()] = _read_text(path)
     return documents
 
-
 def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="ignore")
-
 
 def _plan24_payload(
     operation: str,
@@ -200,7 +190,6 @@ def _plan24_payload(
         },
     }
 
-
 def _plan24_diagnostic(diagnostic: Any, source_path: Path) -> dict[str, Any]:
     rich = diagnostic_to_dict(
         diagnostic,
@@ -235,7 +224,6 @@ def _plan24_diagnostic(diagnostic: Any, source_path: Path) -> dict[str, Any]:
         "blocking": rich["blocking"],
     }
 
-
 def _operation_payload(
     path: Path,
     operation: str,
@@ -252,17 +240,16 @@ def _operation_payload(
         character=character,
     )
 
-
 def check_main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="vasp-lsp-check")
     parser.add_argument("path", type=Path)
     parser.add_argument("--format", choices=["json"], default="json")
     parser.add_argument("--fail-on-blocking", action="store_true")
     args = parser.parse_args(argv)
+
     payload = check_target(args.path)
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 1 if args.fail_on_blocking and not payload["ok"] else 0
-
 
 def explain_main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="vasp-lsp-explain")
@@ -275,7 +262,6 @@ def explain_main(argv: list[str] | None = None) -> int:
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 1 if args.fail_on_blocking and not payload["ok"] else 0
 
-
 def describe_main(argv: list[str] | None = None) -> int:
     """Console entry for ``vasp-lsp-describe``: print the DSL overview JSON (#29)."""
     parser = argparse.ArgumentParser(prog="vasp-lsp-describe")
@@ -284,7 +270,6 @@ def describe_main(argv: list[str] | None = None) -> int:
     payload = with_capabilities(dsl_description.describe_language(), "describe")
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 0
-
 
 def schema_main(argv: list[str] | None = None) -> int:
     """Console entry for ``vasp-lsp-schema``: print the keyword schema JSON (#30)."""
@@ -295,7 +280,6 @@ def schema_main(argv: list[str] | None = None) -> int:
     payload = with_capabilities(dsl_description.describe_keyword(args.keyword), "schema")
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 0
-
 
 def examples_main(argv: list[str] | None = None) -> int:
     """Console entry for ``vasp-lsp-examples``: print minimal example JSON (#31)."""
@@ -314,10 +298,15 @@ def examples_main(argv: list[str] | None = None) -> int:
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 0
 
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="vasp-lsp-tool")
     subparsers = parser.add_subparsers(dest="operation", required=True)
+    capabilities = subparsers.add_parser("capabilities")
+    capabilities.add_argument("--format", choices=["json"], default="json")
+    skill_spec = subparsers.add_parser("skill-spec")
+    skill_spec.add_argument("--format", choices=["json", "yaml"], default="json")
+    skill_export = subparsers.add_parser("skill-export")
+    skill_export.add_argument("--output", type=Path, required=True)
     for operation in (
         "check",
         "context",
@@ -382,6 +371,43 @@ def main(argv: list[str] | None = None) -> int:
         if operation == "check":
             sub.add_argument("--fail-on-blocking", action="store_true")
     args = parser.parse_args(argv)
+
+    if args.operation == "skill-spec":
+        print(skill_spec_text(args.format))
+        return 0
+    if args.operation == "skill-export":
+        print(json.dumps(export_skill(args.output), indent=2, sort_keys=True))
+        return 0
+    if args.operation == "capabilities":
+        from .skill_export import SKILL_SPEC
+
+        payload = {
+            "schema": "OpenQCLspCapabilities",
+            "version": 1,
+            "id": SKILL_SPEC["package"]["name"],
+            "software": SKILL_SPEC["software"],
+            "displayName": SKILL_SPEC["display_name"],
+            "executable": SKILL_SPEC["entrypoints"]["server"],
+            "filePatterns": SKILL_SPEC["file_patterns"],
+            "capabilities": [
+                "diagnostics",
+                "rich-diagnostics",
+                "completion",
+                "hover",
+                "symbols",
+                "fix-preview",
+                "pluggable-skill",
+            ],
+            "agentCli": {
+                "command": SKILL_SPEC["entrypoints"]["tool"],
+                "operations": SKILL_SPEC["operations"],
+                "jsonFormat": True,
+                "failOnBlocking": True,
+            },
+            "diagnosticContract": SKILL_SPEC["diagnostic_contract"],
+        }
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
     if args.operation == "check":
         payload = with_capabilities(check_path(args.path), "check")
         print(json.dumps(payload, indent=2, sort_keys=True))
@@ -421,7 +447,6 @@ def main(argv: list[str] | None = None) -> int:
     payload = _operation_payload(args.path, args.operation, args.line, args.character)
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())
