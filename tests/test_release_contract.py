@@ -53,6 +53,17 @@ def test_release_workflow_is_tag_only_oidc_and_smokes_the_fresh_wheel() -> None:
     assert "python scripts/verify_release.py" in workflow
     assert "python scripts/smoke_test_wheel.py" in workflow
     assert "needs: smoke-wheel" in workflow
+    github_release = workflow.split("  github-release:", 1)[1]
+    assert "needs: smoke-wheel" in github_release
+    assert "needs: publish" not in github_release
+    assert "Verify checkout matches the pushed tag" in github_release
+    assert 'test "$(git rev-parse HEAD)" = "$GITHUB_SHA"' in github_release
+    assert 'test "$(git rev-parse "$GITHUB_REF_NAME^{}")" = "$GITHUB_SHA"' in github_release
+    assert "actions/download-artifact@v4" in github_release
+    assert "name: python-distributions" in github_release
+    assert "GH_REPO: ${{ github.repository }}" in github_release
+    assert 'gh release view "$GITHUB_REF_NAME"' in github_release
+    assert "gh release create" in github_release
 
 
 def test_release_verifier_accepts_only_the_matching_release_tag() -> None:
