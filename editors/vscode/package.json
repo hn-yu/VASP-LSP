@@ -2,7 +2,7 @@
   "name": "vasp-lsp",
   "displayName": "VASP Language Support",
   "description": "Language Server Protocol support for VASP input files (INCAR, POSCAR, KPOINTS)",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "publisher": "newtontech",
   "license": "MIT",
   "engines": {

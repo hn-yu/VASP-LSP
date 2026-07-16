@@ -2,6 +2,15 @@
 
 All notable changes to the VASP-LSP project will be documented in this file.
 
+## [0.4.5] - 2026-07-16
+
+### Added
+- Tag-only PyPI trusted-publishing workflow using GitHub OIDC and the protected `pypi` environment
+- Fresh-wheel release smoke covering the server, agent CLI, and valid, invalid, and runtime-log fixtures
+
+### Changed
+- Aligned Python, VS Code, VERSION, and OpenQC capability metadata for the 0.4.5 release
+
 ## [0.4.4] - 2026-06-15
 
 ### Added

@@ -176,6 +176,25 @@ pytest --cov=src/vasp_lsp --cov-report=term-missing
 To verify current coverage, run the command above and check the TOTAL line in the report.
 Coverage thresholds are enforced in CI (see `.github/workflows/ci.yml`).
 
+### Release verification
+
+Releases are published from `v*` tag pushes by `.github/workflows/release.yml`.
+The workflow checks that the tag, Python package, VS Code extension, `VERSION`,
+and OpenQC capability manifest agree, then builds the distributions and installs
+the wheel into a new virtual environment. The isolated smoke verifies
+`vasp-lsp --help`, the agent JSON CLI, and the valid, invalid, and runtime-log
+fixtures before the OIDC-enabled `pypi` environment can publish. No long-lived
+PyPI token is used.
+
+Maintainers can exercise the same artifact smoke before creating a tag:
+
+```bash
+python -m pip install build
+python -m build
+python scripts/verify_release.py --tag v0.4.5
+python scripts/smoke_test_wheel.py --wheel dist/vasp_lsp-0.4.5-py3-none-any.whl
+```
+
 
 ## Code Quality
 

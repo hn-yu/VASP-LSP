@@ -7,7 +7,7 @@
   "languageId": "vasp",
   "executable": "vasp-lsp",
   "defaultBranch": "main",
-  "releaseVersion": "0.4.4",
+  "releaseVersion": "0.4.5",
   "filePatterns": [
     "INCAR",
     "POSCAR",
