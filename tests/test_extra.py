@@ -237,6 +237,7 @@ class TestCompletionProviderCoverage:
         assert items
         assert items[0].label == "ISMEAR"
         assert "ELPH_ISMEAR" not in [item.label for item in items]
+        assert items[0].insert_text == "ISMEAR ="
 
     def test_get_incar_completions_value_suggestions(self):
         """Test INCAR value suggestions."""
@@ -246,6 +247,12 @@ class TestCompletionProviderCoverage:
         items = provider._get_incar_completions("ISMEAR = ", "ISMEAR = ")
         # Should have enum values for ISMEAR
         assert len(items) > 0
+        assert next(item for item in items if item.label == "0").insert_text == "0"
+
+        # When the tag completion leaves the cursor directly after '=', add
+        # the space as part of the value completion.
+        items = provider._get_incar_completions("ISMEAR =", "ISMEAR =")
+        assert next(item for item in items if item.label == "0").insert_text == " 0"
 
         # Boolean parameter
         items = provider._get_incar_completions("LCHARG = ", "LCHARG = ")
