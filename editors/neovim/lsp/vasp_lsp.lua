@@ -11,6 +11,7 @@ return {
 
   filetypes = {
     "incar",
+    "potcar",
     "poscar",
     "kpoints",
     "outcar",

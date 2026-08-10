@@ -98,6 +98,27 @@ class TestHoverProvider:
         # Should return None for non-VASP files
         assert hover is None
 
+    def test_get_hover_potcar_enmax(self):
+        """POTCAR ENMAX should explain its source and read-only role."""
+        provider = HoverProvider()
+
+        params = Mock()
+        params.text_document = Mock()
+        params.text_document.uri = "file:///test/POTCAR"
+        params.position = Mock()
+        params.position.line = 1
+        params.position.character = 5
+
+        content = "PAW_PBE Fe 06Sep2000\n ENMAX = 267.883; ENMIN = 200.000 eV"
+        hover = provider.get_hover(params, content, "file:///test/POTCAR")
+
+        assert hover is not None
+        value = hover.contents.value
+        assert value.startswith("https://vasp.at/wiki/POTCAR")
+        assert "ENMAX (POTCAR metadata)" in value
+        assert "267.883 eV" in value
+        assert "not an INCAR tag" in value
+
 
 class TestDiagnosticsProvider:
     """Test cases for DiagnosticsProvider."""

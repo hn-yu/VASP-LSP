@@ -1,10 +1,31 @@
 """Hover documentation provider for VASP-LSP."""
 
+import re
 from typing import Optional
 
 from lsprotocol.types import Hover, HoverParams, MarkupContent, MarkupKind, Position
 
 from ..schemas.incar_tags import get_tag_info
+
+_POTCAR_TAG_DOCS = {
+    "ENMAX": (
+        "https://vasp.at/wiki/POTCAR",
+        "Recommended plane-wave cutoff for this pseudopotential in eV. "
+        "For a POTCAR containing multiple species, VASP uses the maximum "
+        "ENMAX as the default cutoff. ENMAX is read-only POTCAR metadata, "
+        "not an INCAR tag; set ENCUT in INCAR to override the default.",
+    ),
+    "ENMIN": (
+        "https://vasp.at/wiki/POTCAR",
+        "Minimum viable plane-wave cutoff for this pseudopotential in eV. "
+        "For a POTCAR containing multiple species, VASP uses the maximum "
+        "ENMIN. ENMIN is read-only POTCAR metadata, not an INCAR tag.",
+    ),
+}
+_POTCAR_VALUE_RE = re.compile(
+    r"\b(?P<name>ENMAX|ENMIN)\s*=\s*(?P<value>[-+]?\d+(?:\.\d+)?)",
+    re.IGNORECASE,
+)
 
 
 class HoverProvider:
@@ -32,6 +53,8 @@ class HoverProvider:
 
         if file_type == "INCAR":
             return self._get_incar_hover(document_content, position)
+        elif file_type == "POTCAR":
+            return self._get_potcar_hover(document_content, position)
         elif file_type == "POSCAR":
             return self._get_poscar_hover(document_content, position)
         elif file_type == "KPOINTS":
@@ -52,6 +75,8 @@ class HoverProvider:
 
         if "INCAR" in filename:
             return "INCAR"
+        if "POTCAR" in filename:
+            return "POTCAR"
         if "POSCAR" in filename or "CONTCAR" in filename:
             return "POSCAR"
         if "KPOINTS" in filename:
@@ -86,6 +111,38 @@ class HoverProvider:
             return Hover(contents=MarkupContent(kind=MarkupKind.Markdown, value=tag.to_markdown()))
 
         return None
+
+    def _get_potcar_hover(self, content: str, position: Position) -> Optional[Hover]:
+        """Get documentation for supported read-only POTCAR metadata tags."""
+        lines = content.split("\n")
+        if position.line >= len(lines):
+            return None
+
+        line = lines[position.line]
+        word = self._get_word_at_position(line, position.character).upper()
+        if word not in _POTCAR_TAG_DOCS:
+            return None
+
+        source_url, description = _POTCAR_TAG_DOCS[word]
+        value_match = _POTCAR_VALUE_RE.search(line)
+        value = value_match.group("value") if value_match else "not available on this line"
+        value_text = f"Value: {value} eV" if value_match else f"Value: {value}"
+        return Hover(
+            contents=MarkupContent(
+                kind=MarkupKind.Markdown,
+                value="\n".join(
+                    [
+                        source_url,
+                        "",
+                        f"{word} (POTCAR metadata)",
+                        "",
+                        value_text,
+                        "",
+                        description,
+                    ]
+                ),
+            )
+        )
 
     def _get_poscar_hover(self, content: str, position: Position) -> Optional[Hover]:
         """Get hover info for POSCAR files.

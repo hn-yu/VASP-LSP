@@ -69,6 +69,20 @@ class TestDiagnosticSnapshot:
         assert "ENCUT" in snap["tags"]
         assert snap["tags"]["ENCUT"]["value"] == 500
 
+    def test_encut_hint_explains_potcar_enmax_source(self):
+        potcar = """PAW_PBE Fe 06Sep2000
+ ENMAX = 400.000; ENMIN = 300.000 eV
+End of Dataset
+"""
+        diagnostics = _incar_diags("ENCUT = 500\n", potcar=potcar)
+        messages = [diagnostic.message for diagnostic in diagnostics]
+
+        assert any(
+            "max POTCAR ENMAX=400" in message
+            and "not an INCAR tag" in message
+            for message in messages
+        )
+
     def test_snapshot_summary_counts_severities(self):
         snap = _incar_snapshot("FOOBAR = 1\n")
         assert "summary" in snap
