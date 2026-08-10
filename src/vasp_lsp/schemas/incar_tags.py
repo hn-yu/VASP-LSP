@@ -31,14 +31,20 @@ class INCARTag:
     source_url: Optional[str] = None  # Official documentation source, when available
 
     def to_markdown(self) -> str:
-        """Generate markdown documentation for this tag."""
+        """Generate clean hover documentation for this tag.
+
+        The LSP advertises this content as Markdown, but the hover client is
+        not required to render Markdown headings.  Keep the tag title as
+        plain text so clients do not expose implementation markup such as
+        ``### EDIFF`` to users.
+        """
         # Keep the raw official Wiki URL on its own first line. Neovim's hover
         # window can then copy just the URL with `yy`, without copying a
         # Markdown label or the surrounding documentation.
         lines = []
         if self.source_url:
             lines.extend([self.source_url, ""])
-        lines.extend([f"### {self.name}", ""])
+        lines.extend([self.name, ""])
         lines.append(f"**Type:** {self.type}")
         lines.append(f"**Default:** {self.default}")
         lines.append(f"**Category:** {self.category}")

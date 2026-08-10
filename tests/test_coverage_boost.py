@@ -407,7 +407,8 @@ class TestINCARTagsCoverage:
 
         assert lines[0] == source_url
         assert lines[1] == ""
-        assert lines[2] == "### TEST_TAG"
+        assert lines[2] == "TEST_TAG"
+        assert "### TEST_TAG" not in tag.to_markdown()
         assert f"**Source:** {source_url}" not in tag.to_markdown()
 
     def test_search_tags(self):
