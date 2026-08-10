@@ -4,6 +4,7 @@ import pytest
 from lsprotocol.types import Range, TextEdit
 
 from vasp_lsp.features.formatting import FormattingProvider
+from vasp_lsp.schemas.incar_tags import INCAR_TAGS
 
 
 @pytest.fixture
@@ -91,6 +92,17 @@ SYSTEM = Fe2 MD
         assert "# Exchange-Correlation" in text
         assert "# Molecular Dynamics" in text
         assert "# Other Parameters" not in text
+
+    def test_all_official_tags_have_explicit_non_other_display_groups(self, formatter):
+        """Every schema-backed Wiki tag must have a meaningful formatter group."""
+        groups = {formatter._incar_display_group(name) for name in INCAR_TAGS}
+
+        assert "Other Parameters" not in groups
+        assert formatter._incar_display_group("LANCZOSTHR") == "Many-Body Methods"
+        assert formatter._incar_display_group("ELPH_DRIVER") == "Electron-Phonon"
+        assert formatter._incar_display_group("ML_LMLFF") == "Machine Learning"
+        assert formatter._incar_display_group("LNMRSHIELD") == "NMR"
+        assert formatter._incar_display_group("LWANNIER90") == "Wannier Functions"
 
 
 class TestPOSCARFormatting:
