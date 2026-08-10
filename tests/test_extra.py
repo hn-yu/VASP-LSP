@@ -259,6 +259,22 @@ class TestCompletionProviderCoverage:
         # Should have .TRUE. and .FALSE.
         assert len(items) > 0
 
+    def test_incar_completion_refreshes_when_prefix_changes(self):
+        """INCAR completions must be refreshed for each changing tag prefix."""
+        provider = CompletionProvider()
+
+        params = Mock()
+        params.text_document = Mock()
+        params.text_document.uri = "file:///test/INCAR"
+        params.position = Mock()
+        params.position.line = 0
+        params.position.character = 4
+
+        result = provider.get_completions(params, "encu", "file:///test/INCAR")
+
+        assert result.is_incomplete is True
+        assert result.items[0].label == "ENCUT"
+
     def test_get_incar_completions_no_tag(self):
         """Test INCAR completions with unknown tag."""
         provider = CompletionProvider()
