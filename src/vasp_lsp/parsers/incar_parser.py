@@ -24,7 +24,7 @@ class INCARParser:
     # Matches: TAG = value  or  TAG= value  or  TAG =value  or  TAG=value
     # Also handles comments starting with # or !
     PARAM_REGEX = re.compile(
-        r"^\s*(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?P<value>[^#!]*)", re.IGNORECASE
+        r"^\s*(?P<name>[A-Za-z_][A-Za-z0-9_/]*)\s*=\s*(?P<value>[^#!]*)", re.IGNORECASE
     )
 
     # Comment patterns

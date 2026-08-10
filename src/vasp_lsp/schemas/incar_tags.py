@@ -5,7 +5,9 @@ enabling autocomplete, validation, and documentation features.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
+
+from .incar_wiki_tags import OFFICIAL_WIKI_TAGS
 
 
 @dataclass
@@ -13,7 +15,9 @@ class INCARTag:
     """Metadata for a single INCAR tag."""
 
     name: str
-    type: str  # "integer", "float", "boolean", "string", "array"
+    # "unknown" means the official Wiki confirms the tag, but its TAGDEF
+    # notation was not unambiguous enough for safe local type validation.
+    type: str  # "integer", "float", "boolean", "string", "array", "unknown"
     default: Any
     description: str
     category: str  # "electronic", "ionic", "parallel", "output", etc.
@@ -24,6 +28,7 @@ class INCARTag:
     version_note: Optional[str] = None  # Version-specific notes
     unit: Optional[str] = None  # e.g. "eV", "eV/Å", "Å", "fs", "Å⁻¹"
     case_sensitive: bool = False  # Whether string enum values are case-sensitive
+    source_url: Optional[str] = None  # Official documentation source, when available
 
     def to_markdown(self) -> str:
         """Generate markdown documentation for this tag."""
@@ -43,6 +48,9 @@ class INCARTag:
         if self.conflicts_with:
             lines.append("")
             lines.append(f"**Conflicts with:** {', '.join(self.conflicts_with)}")
+        if self.source_url:
+            lines.append("")
+            lines.append(f"**Source:** {self.source_url}")
         return "\n".join(lines)
 
 
@@ -797,6 +805,18 @@ INCAR_TAGS: Dict[str, INCARTag] = {
         category="output",
     ),
 }
+
+# The curated entries above take precedence because they contain reviewed
+# project-specific validation metadata. Every remaining official Wiki page is
+# still registered, so a documented tag is not reported as unknown; records
+# with type="unknown" intentionally skip value validation until their Wiki
+# TAGDEF can be interpreted without guessing.
+for _wiki_tag_name, _wiki_tag_metadata in OFFICIAL_WIKI_TAGS.items():
+    if _wiki_tag_name not in INCAR_TAGS:
+        INCAR_TAGS[_wiki_tag_name] = INCARTag(
+            **cast(Dict[str, Any], _wiki_tag_metadata)
+        )
+
 
 # List of all tag names for quick reference
 INCAR_TAG_LIST: List[str] = list(INCAR_TAGS.keys())

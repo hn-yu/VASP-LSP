@@ -9,7 +9,12 @@ from lsprotocol.types import DiagnosticSeverity
 
 from vasp_lsp.features.diagnostics import DiagnosticsProvider
 from vasp_lsp.parsers.incar_parser import INCARParser
-from vasp_lsp.schemas.incar_tags import INCARTag, get_tag_info
+from vasp_lsp.schemas.incar_tags import (
+    INCAR_TAGS,
+    OFFICIAL_WIKI_TAGS,
+    INCARTag,
+    get_tag_info,
+)
 
 FE2_FIXTURE = Path(__file__).parent / "fixtures" / "real_world" / "fe2" / "INCAR"
 COMMON_AUDIT_TAGS = (
@@ -134,6 +139,26 @@ def test_common_tags_still_reject_obviously_invalid_values(assignment):
 def test_common_dft_schema_audit_tags_are_present():
     missing = [name for name in COMMON_AUDIT_TAGS if get_tag_info(name) is None]
     assert missing == []
+
+
+def test_official_wiki_catalog_is_loaded_without_lowering_unknown_tag_severity():
+    """The complete official category is known locally, with provenance."""
+    assert len(OFFICIAL_WIKI_TAGS) >= 600
+    assert set(OFFICIAL_WIKI_TAGS).issubset(INCAR_TAGS)
+    assert all(
+        metadata["source_url"].startswith("https://vasp.at/wiki/")
+        for metadata in OFFICIAL_WIKI_TAGS.values()
+    )
+
+
+def test_official_slash_tag_is_parsed_and_validated():
+    """Some current Wiki tags contain a slash in their canonical name."""
+    content = "KERNEL_TRUNCATION/FACTOR = 0.5\n"
+    parsed = INCARParser(content).parse()
+    assert parsed["KERNEL_TRUNCATION/FACTOR"].value == 0.5
+    diagnostics = _incar_diagnostics(content)
+    assert not any("Unknown INCAR tag" in diagnostic.message for diagnostic in diagnostics)
+    assert not any("Invalid value" in diagnostic.message for diagnostic in diagnostics)
 
 
 def test_lreal_schema_uses_boolean_semantics_with_documented_alternatives():

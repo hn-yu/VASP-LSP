@@ -5,8 +5,8 @@
   "languageId": "vasp-input",
   "generatedAt": "2026-06-15T00:00:00Z",
   "summary": {
-    "docstringsTotal": 45,
-    "docstringsLinked": 45,
+    "docstringsTotal": 46,
+    "docstringsLinked": 46,
     "wikiPagesTotal": 3,
     "rawAssetsTotal": 10,
     "ruleIdsTotal": 10,
@@ -242,6 +242,12 @@
       "symbol": "incar_tags",
       "wikiPath": "wiki/entities/VASP_LSP.md",
       "docstring": "VASP INCAR tag definitions with metadata."
+    },
+    {
+      "path": "src/vasp_lsp/schemas/incar_wiki_tags.py",
+      "symbol": "incar_wiki_tags",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "Generated from the official VASP Wiki INCAR-tag category."
     },
     {
       "path": "src/vasp_lsp/schemas/vasp_error_patterns.py",
