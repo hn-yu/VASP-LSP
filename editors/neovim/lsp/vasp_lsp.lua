@@ -24,4 +24,14 @@ return {
     "POTCAR",
     ".git",
   },
+
+  -- Keep compatibility with older VASP-LSP/pygls installations that may
+  -- advertise incremental sync. The server also applies incremental changes,
+  -- so this is a defensive client-side fallback rather than a requirement.
+  on_init = function(client)
+    local sync = client.server_capabilities.textDocumentSync
+    if type(sync) == "table" then
+      sync.change = 1 -- TextDocumentSyncKind.Full
+    end
+  end,
 }

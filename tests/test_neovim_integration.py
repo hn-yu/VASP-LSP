@@ -22,7 +22,7 @@ def test_bundled_neovim_config_attaches_to_incar(tmp_path: Path) -> None:
         pytest.skip("requires nvim and vasp-lsp on PATH")
 
     incar = tmp_path / "INCAR"
-    incar.write_text("ENCUT = 520\n", encoding="utf-8")
+    incar.write_text("LREAL = .FALSE.\n", encoding="utf-8")
     command = [
         nvim,
         "--headless",
@@ -43,8 +43,23 @@ def test_bundled_neovim_config_attaches_to_incar(tmp_path: Path) -> None:
         ),
         "-c",
         (
-            'lua if #vim.lsp.get_clients({name="vasp_lsp"}) ~= 1 then '
+            'lua local clients=vim.lsp.get_clients({name="vasp_lsp"}); '
+            'if #clients ~= 1 or clients[1].server_capabilities.textDocumentSync.change ~= 1 then '
             'vim.api.nvim_err_writeln("VASP_LSP_NOT_ATTACHED") '
+            'vim.cmd("cquit 1") end'
+        ),
+        "-c",
+        (
+            "lua vim.api.nvim_buf_set_text(0, 0, 8, 0, 15, {\"maybe\"})"
+        ),
+        "-c",
+        "lua vim.wait(3000)",
+        "-c",
+        (
+            'lua local found=false; for _,diagnostic in ipairs(vim.diagnostic.get(0)) do '
+            'if diagnostic.message:find("Invalid value for LREAL", 1, true) then '
+            'found=true end end; if not found then '
+            'vim.api.nvim_err_writeln("VASP_LSP_INCREMENTAL_SYNC_BROKEN"); '
             'vim.cmd("cquit 1") end'
         ),
         "-c",

@@ -44,6 +44,10 @@ LazyVim, already do this. A minimal configuration can use:
 vim.cmd("filetype plugin indent on")
 ~~~
 
+The bundled configuration also includes a small `on_init` compatibility
+fallback that requests full-document synchronization from older VASP-LSP/pygls
+installations. New installations receive the same mode from the server itself.
+
 ## Optional VASP log filetypes
 
 The server can diagnose OUTCAR, OSZICAR, STDOUT, STDERR, vasp.out, and Slurm
