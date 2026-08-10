@@ -23,9 +23,12 @@ export function activate(context: ExtensionContext) {
       { scheme: 'file', language: 'vasp-in' },
       { scheme: 'file', language: 'vasp-poscar' },
       { scheme: 'file', language: 'vasp-kpoints' },
+      { scheme: 'file', language: 'vasp-potcar' },
     ],
     synchronize: {
-      fileEvents: workspace.createFileSystemWatcher('**/{INCAR,POSCAR,CONTCAR,KPOINTS}*'),
+      fileEvents: workspace.createFileSystemWatcher(
+        '**/{INCAR,POSCAR,CONTCAR,KPOINTS,POTCAR}*'
+      ),
     },
   };
 
