@@ -74,12 +74,15 @@ class _CaptureServer(VASPLanguageServer):
     def __init__(self) -> None:
         super().__init__()
         self.published_diagnostics: Dict[str, List[Diagnostic]] = {}
+        self.published_versions: Dict[str, Optional[int]] = {}
 
     def publish_diagnostics(
         self, uri: str, diagnostics: Optional[List[Diagnostic]] = None, **kwargs: object
     ) -> None:
         """Override to capture published diagnostics instead of sending over transport."""
         self.published_diagnostics[uri] = diagnostics or []
+        version = kwargs.get("version")
+        self.published_versions[uri] = version if isinstance(version, int) else None
 
 
 @pytest.fixture()
@@ -281,6 +284,24 @@ class TestDocumentSynchronization:
         assert server.get_document_content(INCAR_URI) == "LREAL = maybe\n"
         diags = server.published_diagnostics.get(INCAR_URI, [])
         assert any("Invalid value for LREAL" in diagnostic.message for diagnostic in diags)
+
+    def test_diagnostics_follow_full_document_edit_version_and_range(
+        self, server: _CaptureServer
+    ) -> None:
+        """Formatting-like full edits publish diagnostics for the new document."""
+        original = "BADTAG = 1\nENCUT = 500"
+        text_document_did_open(_make_did_open(INCAR_URI, original, version=1))
+        assert server.published_versions[INCAR_URI] == 1
+
+        # A formatter commonly moves the offending line while replacing the
+        # whole document.  The diagnostic must follow that new document.
+        formatted = "ENCUT = 500\nBADTAG = 1"
+        text_document_did_change(_make_did_change(INCAR_URI, formatted, version=2))
+
+        diagnostics = server.published_diagnostics[INCAR_URI]
+        badtag = next(d for d in diagnostics if "Unknown INCAR tag" in d.message)
+        assert badtag.range.start.line == 1
+        assert server.published_versions[INCAR_URI] == 2
 
     def test_did_save_republishes_diagnostics(self, server: _CaptureServer) -> None:
         """didSave republishes diagnostics from cached content."""

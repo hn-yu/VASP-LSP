@@ -149,3 +149,73 @@ def test_bundled_neovim_config_advertises_completion_triggers(tmp_path: Path) ->
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     assert "VASP_LSP_COMPLETION_TRIGGERS_MISSING" not in output
+
+
+@pytest.mark.integration
+def test_bundled_neovim_config_discards_stale_versioned_diagnostics(
+    tmp_path: Path,
+) -> None:
+    """An older diagnostic notification must not replace a newer one."""
+    nvim = shutil.which("nvim")
+    vasp_lsp = shutil.which("vasp-lsp")
+    if nvim is None or vasp_lsp is None:
+        pytest.skip("requires nvim and vasp-lsp on PATH")
+
+    incar = tmp_path / "INCAR"
+    incar.write_text("BADTAG = 1\n", encoding="utf-8")
+    command = [
+        nvim,
+        "--headless",
+        "-u",
+        "NONE",
+        "--cmd",
+        f"set rtp^={NVIM_CONFIG_ROOT}",
+        "-c",
+        "filetype on",
+        "-c",
+        'lua vim.lsp.enable("vasp_lsp")',
+        "-c",
+        f"edit {incar}",
+        "-c",
+        (
+            "lua vim.wait(4000, function() "
+            'return #vim.lsp.get_clients({name="vasp_lsp"}) > 0 end, 100)'
+        ),
+        "-c",
+        (
+            'lua local client=vim.lsp.get_clients({name="vasp_lsp"})[1]; '
+            'local handler=client and client.handlers["textDocument/publishDiagnostics"]; '
+            'local uri=vim.uri_from_bufnr(0); '
+            'if type(handler) ~= "function" then '
+            'vim.api.nvim_err_writeln("VASP_LSP_DIAGNOSTIC_FILTER_MISSING"); '
+            'vim.cmd("cquit 1") end; '
+            'local ctx={client_id=client.id, method="textDocument/publishDiagnostics"}; '
+            'handler(nil, {uri=uri, version=2, diagnostics={{'
+            'range={start={line=1, character=0}, ["end"]={line=1, character=6}}, '
+            'message="new diagnostic", severity=1}},}, ctx); '
+            'handler(nil, {uri=uri, version=1, diagnostics={{'
+            'range={start={line=0, character=0}, ["end"]={line=0, character=6}}, '
+            'message="old diagnostic", severity=1}},}, ctx); '
+            'local diagnostics=vim.diagnostic.get(0); '
+            'if #diagnostics ~= 1 or diagnostics[1].message ~= "new diagnostic" '
+            'or diagnostics[1].lnum ~= 1 then '
+            'vim.api.nvim_err_writeln("VASP_LSP_STALE_DIAGNOSTIC_ACCEPTED"); '
+            'vim.cmd("cquit 1") end'
+        ),
+        "-c",
+        "qa!",
+    ]
+    result = subprocess.run(
+        command,
+        cwd=tmp_path,
+        env=os.environ.copy(),
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "VASP_LSP_DIAGNOSTIC_FILTER_MISSING" not in output
+    assert "VASP_LSP_STALE_DIAGNOSTIC_ACCEPTED" not in output
