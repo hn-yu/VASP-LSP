@@ -52,7 +52,13 @@ class CompletionProvider:
         else:
             items = []
 
-        return CompletionList(is_incomplete=False, items=items)
+        # INCAR candidates depend on the current tag/value prefix.  Mark the
+        # result incomplete so clients such as blink.cmp re-request after the
+        # prefix changes instead of reusing a stale completion cache.
+        return CompletionList(
+            is_incomplete=file_type == "INCAR",
+            items=items,
+        )
 
     def _get_file_type(self, uri: str) -> str:
         """Determine file type from URI.

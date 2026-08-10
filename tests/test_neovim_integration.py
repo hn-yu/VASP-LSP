@@ -129,7 +129,7 @@ def test_bundled_neovim_config_advertises_completion_triggers(tmp_path: Path) ->
             'vim.wait(4000, function() return done end, 100); '
             'local found=false; local items=response and (response.items or response) or {}; '
             'for _, item in ipairs(items) do if item.label == "0" then found=true end end; '
-            'if request_error or not done or not found then '
+            'if request_error or not done or not found or response.isIncomplete ~= true then '
             'vim.api.nvim_err_writeln("VASP_LSP_ISMEAR_COMPLETION_BROKEN"); '
             'vim.cmd("cquit 1") end'
         ),
