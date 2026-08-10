@@ -32,7 +32,13 @@ class INCARTag:
 
     def to_markdown(self) -> str:
         """Generate markdown documentation for this tag."""
-        lines = [f"### {self.name}", ""]
+        # Keep the raw official Wiki URL on its own first line. Neovim's hover
+        # window can then copy just the URL with `yy`, without copying a
+        # Markdown label or the surrounding documentation.
+        lines = []
+        if self.source_url:
+            lines.extend([self.source_url, ""])
+        lines.extend([f"### {self.name}", ""])
         lines.append(f"**Type:** {self.type}")
         lines.append(f"**Default:** {self.default}")
         lines.append(f"**Category:** {self.category}")
@@ -48,9 +54,6 @@ class INCARTag:
         if self.conflicts_with:
             lines.append("")
             lines.append(f"**Conflicts with:** {', '.join(self.conflicts_with)}")
-        if self.source_url:
-            lines.append("")
-            lines.append(f"**Source:** {self.source_url}")
         return "\n".join(lines)
 
 

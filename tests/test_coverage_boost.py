@@ -392,6 +392,24 @@ class TestINCARTagsCoverage:
         assert "**Conflicts with:**" in md
         assert "CONFLICT_TAG" in md
 
+    def test_to_markdown_puts_source_url_first(self):
+        """The Wiki URL should be the first copyable line in hover output."""
+        source_url = "https://www.vasp.at/wiki/TEST_TAG"
+        tag = INCARTag(
+            name="TEST_TAG",
+            type="float",
+            default=1.0,
+            description="Test description",
+            category="test",
+            source_url=source_url,
+        )
+        lines = tag.to_markdown().splitlines()
+
+        assert lines[0] == source_url
+        assert lines[1] == ""
+        assert lines[2] == "### TEST_TAG"
+        assert f"**Source:** {source_url}" not in tag.to_markdown()
+
     def test_search_tags(self):
         """Test search_tags function - covers lines 535-540."""
         results = search_tags("encut")
