@@ -126,7 +126,9 @@ class CompletionProvider:
                             if len(tag.description) > 200
                             else tag.description
                         ),
-                        insert_text=f"{tag_name} = ",
+                        # Leave the cursor directly after '=' so clients can
+                        # automatically trigger value completion on accept.
+                        insert_text=f"{tag_name} =",
                         sort_text=f"{match_rank}:{tag_name}",
                     )
                     items.append(item)
@@ -135,6 +137,7 @@ class CompletionProvider:
             # We're after '=', provide value completions
             tag_name = line_prefix.split("=")[0].strip().upper()
             tag = INCAR_TAGS.get(tag_name)
+            value_insert_prefix = " " if line_prefix.endswith("=") else ""
 
             if tag and tag.enum_values:
                 for value in tag.enum_values:
@@ -142,7 +145,7 @@ class CompletionProvider:
                         label=value,
                         kind=CompletionItemKind.EnumMember,
                         detail=f"Valid value for {tag_name}",
-                        insert_text=value,
+                        insert_text=f"{value_insert_prefix}{value}",
                     )
                     items.append(item)
 
@@ -151,7 +154,7 @@ class CompletionProvider:
                     item = CompletionItem(
                         label=value,
                         kind=CompletionItemKind.EnumMember,
-                        insert_text=value,
+                        insert_text=f"{value_insert_prefix}{value}",
                     )
                     items.append(item)
 
