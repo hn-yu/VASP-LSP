@@ -242,7 +242,13 @@ def text_document_did_save(params: DidSaveTextDocumentParams):
         _publish_diagnostics(uri, content)
 
 
-@server.feature(TEXT_DOCUMENT_COMPLETION)
+@server.feature(
+    TEXT_DOCUMENT_COMPLETION,
+    CompletionOptions(
+        resolve_provider=False,
+        trigger_characters=["=", " ", "."],
+    ),
+)
 def completions(params: CompletionParams):
     """Handle completion request."""
     uri = params.text_document.uri

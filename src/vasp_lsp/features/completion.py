@@ -101,14 +101,20 @@ class CompletionProvider:
             words = line_prefix.strip().split()
             partial = words[-1] if words else ""
 
-            # Filter tags that match the partial word
-            matching_tags = [
-                tag
-                for tag in self.incar_tags
-                if tag.startswith(partial.upper()) or partial.upper() in tag
-            ]
+            # Prefer tags that start with the query.  Substring matching is
+            # still useful for less familiar tags (for example, ELPH_ISMEAR),
+            # but it should not hide the direct ISMEAR match.
+            partial_upper = partial.upper()
+            prefix_matches = [tag for tag in self.incar_tags if tag.startswith(partial_upper)]
+            if prefix_matches:
+                matching_tags = [(0, tag) for tag in prefix_matches]
+            else:
+                matching_tags = [
+                    (1, tag) for tag in self.incar_tags if partial_upper in tag
+                ]
+            matching_tags.sort()
 
-            for tag_name in matching_tags[:50]:  # Limit to 50 results
+            for match_rank, tag_name in matching_tags[:50]:  # Limit to 50 results
                 tag = INCAR_TAGS.get(tag_name)
                 if tag:
                     item = CompletionItem(
@@ -121,7 +127,7 @@ class CompletionProvider:
                             else tag.description
                         ),
                         insert_text=f"{tag_name} = ",
-                        sort_text=tag_name,
+                        sort_text=f"{match_rank}:{tag_name}",
                     )
                     items.append(item)
 
