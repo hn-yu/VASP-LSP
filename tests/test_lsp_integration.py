@@ -31,9 +31,11 @@ from lsprotocol.types import (
     Range,
     ReferenceParams,
     RenameParams,
+    TextDocumentContentChangeEvent_Type1,
     TextDocumentContentChangeEvent_Type2,
     TextDocumentIdentifier,
     TextDocumentItem,
+    TextDocumentSyncKind,
     VersionedTextDocumentIdentifier,
     WorkspaceSymbolParams,
 )
@@ -184,6 +186,8 @@ class TestServerLifecycle:
         # Text document sync
         sync = caps.text_document_sync
         assert sync.open_close is True
+        assert sync.change == TextDocumentSyncKind.Full
+        assert server._text_document_sync_kind == TextDocumentSyncKind.Full
 
         # Completion provider
         assert caps.completion_provider is not None
@@ -252,6 +256,31 @@ class TestDocumentSynchronization:
 
         diags = server.published_diagnostics.get(INCAR_URI, [])
         assert any("Unknown INCAR tag" in d.message for d in diags)
+
+    def test_incremental_did_change_preserves_document_and_diagnostics(
+        self, server: _CaptureServer
+    ) -> None:
+        """A range edit must be applied to the cached full document."""
+        original = "LREAL = .FALSE.\n"
+        text_document_did_open(_make_did_open(INCAR_URI, original))
+
+        change = DidChangeTextDocumentParams(
+            text_document=VersionedTextDocumentIdentifier(uri=INCAR_URI, version=2),
+            content_changes=[
+                TextDocumentContentChangeEvent_Type1(
+                    range=Range(
+                        start=Position(line=0, character=8),
+                        end=Position(line=0, character=15),
+                    ),
+                    text="maybe",
+                )
+            ],
+        )
+        text_document_did_change(change)
+
+        assert server.get_document_content(INCAR_URI) == "LREAL = maybe\n"
+        diags = server.published_diagnostics.get(INCAR_URI, [])
+        assert any("Invalid value for LREAL" in diagnostic.message for diagnostic in diags)
 
     def test_did_save_republishes_diagnostics(self, server: _CaptureServer) -> None:
         """didSave republishes diagnostics from cached content."""

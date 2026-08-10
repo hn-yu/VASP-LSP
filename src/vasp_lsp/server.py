@@ -75,7 +75,14 @@ class VASPLanguageServer(LanguageServer):
     """VASP Language Server implementation."""
 
     def __init__(self):
-        super().__init__(name="vasp-lsp", version=__version__)
+        # pygls uses this value when it builds the actual initialize response.
+        # Keeping it explicit is important: the custom initialize handler below
+        # is not the handler used by pygls's built-in protocol initializer.
+        super().__init__(
+            name="vasp-lsp",
+            version=__version__,
+            text_document_sync_kind=TextDocumentSyncKind.Full,
+        )
         self.completion_provider = CompletionProvider()
         self.hover_provider = HoverProvider()
         self.diagnostics_provider = DiagnosticsProvider()
@@ -106,6 +113,62 @@ class VASPLanguageServer(LanguageServer):
 
 # Create server instance
 server = VASPLanguageServer()
+
+
+def _utf16_character_to_index(line: str, character: int) -> int:
+    """Convert an LSP UTF-16 character offset to a Python string index."""
+    if character <= 0:
+        return 0
+
+    utf16_units = 0
+    for index, value in enumerate(line):
+        next_units = utf16_units + (2 if ord(value) > 0xFFFF else 1)
+        if next_units > character:
+            return index
+        utf16_units = next_units
+        if utf16_units == character:
+            return index + 1
+
+    return len(line)
+
+
+def _position_to_offset(content: str, position: Position) -> int:
+    """Convert an LSP position into a Python string offset."""
+    line_number = max(position.line, 0)
+    lines = content.splitlines(keepends=True)
+    if line_number >= len(lines):
+        return len(content)
+
+    line_start = sum(len(line) for line in lines[:line_number])
+    line = lines[line_number]
+    return line_start + _utf16_character_to_index(line, position.character)
+
+
+def _apply_content_changes(content: str, content_changes: List[Any]) -> str:
+    """Apply full-document and incremental LSP changes in notification order.
+
+    LSP clients are allowed to send either a complete replacement (no range)
+    or one or more range-based changes.  The latter is what Neovim sends when
+    its client sees ``textDocumentSync.change = Incremental``.
+    """
+    for change in content_changes:
+        replacement = getattr(change, "text", "")
+        change_range = getattr(change, "range", None)
+
+        # Type2 changes have no range and replace the whole document.  The
+        # isinstance check also keeps compatibility with simple test doubles.
+        if not isinstance(change_range, Range):
+            content = replacement
+            continue
+
+        start = _position_to_offset(content, change_range.start)
+        end = _position_to_offset(content, change_range.end)
+        if end < start:
+            logger.warning("Ignoring invalid LSP change range: %s", change_range)
+            continue
+        content = content[:start] + replacement + content[end:]
+
+    return content
 
 
 @server.feature("initialize")
@@ -163,9 +226,9 @@ def text_document_did_open(params: DidOpenTextDocumentParams):
 def text_document_did_change(params: DidChangeTextDocumentParams):
     """Handle document change."""
     uri = params.text_document.uri
-    # Get the latest content
     if params.content_changes:
-        content = params.content_changes[0].text
+        previous_content = server.get_document_content(uri) or ""
+        content = _apply_content_changes(previous_content, params.content_changes)
         server.set_document_content(uri, content)
         _publish_diagnostics(uri, content)
 

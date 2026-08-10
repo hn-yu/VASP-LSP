@@ -5,7 +5,9 @@ enabling autocomplete, validation, and documentation features.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
+
+from .incar_wiki_tags import OFFICIAL_WIKI_TAGS
 
 
 @dataclass
@@ -13,7 +15,9 @@ class INCARTag:
     """Metadata for a single INCAR tag."""
 
     name: str
-    type: str  # "integer", "float", "boolean", "string", "array"
+    # "unknown" means the official Wiki confirms the tag, but its TAGDEF
+    # notation was not unambiguous enough for safe local type validation.
+    type: str  # "integer", "float", "boolean", "string", "array", "unknown"
     default: Any
     description: str
     category: str  # "electronic", "ionic", "parallel", "output", etc.
@@ -24,6 +28,7 @@ class INCARTag:
     version_note: Optional[str] = None  # Version-specific notes
     unit: Optional[str] = None  # e.g. "eV", "eV/Å", "Å", "fs", "Å⁻¹"
     case_sensitive: bool = False  # Whether string enum values are case-sensitive
+    source_url: Optional[str] = None  # Official documentation source, when available
 
     def to_markdown(self) -> str:
         """Generate markdown documentation for this tag."""
@@ -43,6 +48,9 @@ class INCARTag:
         if self.conflicts_with:
             lines.append("")
             lines.append(f"**Conflicts with:** {', '.join(self.conflicts_with)}")
+        if self.source_url:
+            lines.append("")
+            lines.append(f"**Source:** {self.source_url}")
         return "\n".join(lines)
 
 
@@ -171,6 +179,61 @@ INCAR_TAGS: Dict[str, INCARTag] = {
         category="electronic",
         valid_range=(1, None),
     ),
+    "NELMDL": INCARTag(
+        name="NELMDL",
+        type="integer",
+        default=None,
+        description=(
+            "Number of non-self-consistent electronic steps at the beginning. "
+            "The default is conditional on ISTART, INIWAV, IALGO, and whether a WAVECAR is present."
+        ),
+        category="electronic",
+        version_note=(
+            "VASP.6 allows positive NELMDL values for delays after ionic movements; "
+            "the recommended behavior depends on ALGO and the VASP version."
+        ),
+    ),
+    "IALGO": INCARTag(
+        name="IALGO",
+        type="integer",
+        default=None,
+        description=(
+            "Selects the algorithm used to optimize the orbitals. Allowed values are "
+            "-1, 2-4, 5-8, 15-18, 28, 38, 44-48, and 53-58."
+        ),
+        category="electronic",
+        enum_values=[
+            "-1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "15",
+            "16",
+            "17",
+            "18",
+            "28",
+            "38",
+            "44",
+            "45",
+            "46",
+            "47",
+            "48",
+            "53",
+            "54",
+            "55",
+            "56",
+            "57",
+            "58",
+        ],
+        version_note=(
+            "The VASP Wiki recommends selecting algorithms through ALGO; several older "
+            "IALGO algorithms are deprecated or unsupported in VASP.5 and newer."
+        ),
+    ),
     "ALGO": INCARTag(
         name="ALGO",
         type="string",
@@ -217,6 +280,54 @@ INCAR_TAGS: Dict[str, INCARTag] = {
         description="Determines whether the PROCAR or PROOUT files are written and the format of the file. 0: no output, 1: simple output, 2: detailed output, 5: simple output + phase, 10: time-dependent DFT, 11: like 1 + phase information, 12: like 2 + phase information.",
         category="output",
         enum_values=["0", "1", "2", "5", "10", "11", "12"],
+    ),
+    "ADDGRID": INCARTag(
+        name="ADDGRID",
+        type="boolean",
+        default=False,
+        description=(
+            "Determines whether an additional support grid is used for evaluating "
+            "the augmentation charges."
+        ),
+        category="accuracy",
+        version_note=(
+            "The VASP Wiki recommends testing this setting carefully rather than using "
+            "it by default in every calculation."
+        ),
+    ),
+    "LASPH": INCARTag(
+        name="LASPH",
+        type="boolean",
+        default=False,
+        description=(
+            "Includes non-spherical contributions related to the gradient of the "
+            "density inside the PAW spheres."
+        ),
+        category="exchange-correlation",
+        version_note=(
+            "In VASP.5 and newer, the aspherical contributions are included in the "
+            "Kohn-Sham potential when LASPH=.TRUE."
+        ),
+    ),
+    "LMAXMIX": INCARTag(
+        name="LMAXMIX",
+        type="integer",
+        default=2,
+        description=(
+            "Controls the maximum l-quantum number of one-center PAW charge-density "
+            "components passed through the density mixer and written to CHGCAR."
+        ),
+        category="mixing",
+    ),
+    "LMIXTAU": INCARTag(
+        name="LMIXTAU",
+        type="boolean",
+        default=False,
+        description=(
+            "Determines whether the kinetic-energy density is passed through the "
+            "density mixer as well."
+        ),
+        category="mixing",
     ),
     "NEDOS": INCARTag(
         name="NEDOS",
@@ -267,6 +378,30 @@ INCAR_TAGS: Dict[str, INCARTag] = {
         description="Controls whether the stress tensor is calculated and which degrees of freedom are allowed to change. 0: MD, no stress tensor, 1: ionic relaxation, stress tensor calculated, 2: ionic relaxation, stress tensor calculated, 3: ionic + cell shape relaxation, 4: ionic + cell shape + volume relaxation, 5: cell shape + volume relaxation (constant pressure), 6: cell shape relaxation (constant volume), 7: cell volume relaxation (constant shape).",
         category="ionic",
         enum_values=["0", "1", "2", "3", "4", "5", "6", "7"],
+    ),
+    # Symmetry
+    "ISYM": INCARTag(
+        name="ISYM",
+        type="integer",
+        default=None,
+        description=(
+            "Determines how VASP treats symmetry. Values -1 and 0 switch symmetry "
+            "off; values 1, 2, and 3 enable the corresponding symmetry treatments. "
+            "The default depends on the pseudopotential and whether LHFCALC is enabled."
+        ),
+        category="symmetry",
+        enum_values=["-1", "0", "1", "2", "3"],
+    ),
+    "SYMPREC": INCARTag(
+        name="SYMPREC",
+        type="float",
+        default=1e-5,
+        description=(
+            "Determines the positional accuracy used when identifying equivalent "
+            "atomic positions during symmetry analysis."
+        ),
+        category="symmetry",
+        version_note="Available since VASP.4.4.4 according to the VASP Wiki.",
     ),
     # K-points
     "KGAMMA": INCARTag(
@@ -354,6 +489,39 @@ INCAR_TAGS: Dict[str, INCARTag] = {
         description="Determines whether the electron localization function (ELF) is written to the ELFCAR file.",
         category="output",
     ),
+    "LDIPOL": INCARTag(
+        name="LDIPOL",
+        type="boolean",
+        default=False,
+        description=(
+            "Switches on corrections to the potential and forces for charged molecules "
+            "and slabs with a net dipole moment."
+        ),
+        category="electrostatics",
+        requires=["IDIPOL"],
+    ),
+    "IDIPOL": INCARTag(
+        name="IDIPOL",
+        type="integer",
+        default=None,
+        description=(
+            "Selects the direction for monopole, dipole, and quadrupole corrections: "
+            "1, 2, or 3 for one lattice direction, or 4 for all directions."
+        ),
+        category="electrostatics",
+        enum_values=["1", "2", "3", "4"],
+    ),
+    "DIPOL": INCARTag(
+        name="DIPOL",
+        type="array",
+        default=None,
+        description=(
+            "Specifies the center of the cell in direct lattice coordinates with "
+            "respect to which the total dipole moment is calculated."
+        ),
+        category="electrostatics",
+        unit="direct lattice coordinates",
+    ),
     "LORBITALREAL": INCARTag(
         name="LORBITALREAL",
         type="boolean",
@@ -397,6 +565,29 @@ INCAR_TAGS: Dict[str, INCARTag] = {
         description="Determines the type of van der Waals correction. 0: no correction, 1: DFT-D2, 11: DFT-D3, 12: DFT-D3 with Becke-Johnson damping, 2: TS method, 21: TS with iterative Hirshfeld partitioning, 202: MBD@rsSCS.",
         category="electronic",
         enum_values=["0", "1", "11", "12", "2", "21", "202"],
+    ),
+    # Exchange-correlation functionals
+    "GGA": INCARTag(
+        name="GGA",
+        type="string",
+        default=None,
+        description="Selects an LDA or GGA exchange-correlation functional.",
+        category="exchange-correlation",
+        version_note=(
+            "The available functional names depend on the VASP version and compilation "
+            "options; see the VASP Wiki for the current list."
+        ),
+    ),
+    "METAGGA": INCARTag(
+        name="METAGGA",
+        type="string",
+        default=None,
+        description="Selects a meta-GGA exchange-correlation functional.",
+        category="exchange-correlation",
+        version_note=(
+            "The available meta-GGA functional names and their VASP-version availability "
+            "are documented on the VASP Wiki."
+        ),
     ),
     # DFT+U
     "LDAU": INCARTag(
@@ -447,6 +638,25 @@ INCAR_TAGS: Dict[str, INCARTag] = {
         description="Determines whether spin-orbit coupling is included. If set to .TRUE., a non-collinear calculation with spin-orbit coupling is performed.",
         category="electronic",
     ),
+    "LNONCOLLINEAR": INCARTag(
+        name="LNONCOLLINEAR",
+        type="boolean",
+        default=False,
+        description="Switches on noncollinear magnetic calculations.",
+        category="magnetism",
+        version_note=("Supported since VASP.4.5; the default becomes .TRUE. when LSORBIT=.TRUE."),
+    ),
+    "NUPDOWN": INCARTag(
+        name="NUPDOWN",
+        type="float",
+        default=None,
+        description=(
+            "Sets the difference between the numbers of electrons in the up and down "
+            "spin components. A specified value fixes the spin multiplet; NUPDOWN=-1 "
+            "requests a full relaxation."
+        ),
+        category="magnetism",
+    ),
     "SAXIS": INCARTag(
         name="SAXIS",
         type="array",
@@ -471,6 +681,34 @@ INCAR_TAGS: Dict[str, INCARTag] = {
         description="Cutoff wave vector for Kerker mixing scheme in Å⁻¹.",
         category="electronic",
         valid_range=(0.0, None),
+    ),
+    "AMIX_MAG": INCARTag(
+        name="AMIX_MAG",
+        type="float",
+        default=1.6,
+        description="Linear mixing parameter for the magnetization density.",
+        category="mixing",
+    ),
+    "BMIX_MAG": INCARTag(
+        name="BMIX_MAG",
+        type="float",
+        default=1.0,
+        description=(
+            "Sets the cutoff wave vector for the Kerker mixing scheme for the "
+            "magnetization density."
+        ),
+        category="mixing",
+    ),
+    "MAXMIX": INCARTag(
+        name="MAXMIX",
+        type="integer",
+        default=-45,
+        description=(
+            "Specifies the maximum number of vectors stored in the Broyden or Pulay "
+            "mixer. Negative and positive values select different reset behavior."
+        ),
+        category="mixing",
+        version_note="Available since VASP.4.4 according to the VASP Wiki.",
     ),
     "AMIN": INCARTag(
         name="AMIN",
@@ -538,11 +776,11 @@ INCAR_TAGS: Dict[str, INCARTag] = {
     ),
     "LREAL": INCARTag(
         name="LREAL",
-        type="string",
-        default=".FALSE.",
-        description="Determines whether the projection operators are evaluated in real space. Options: .FALSE., .TRUE., On, Auto. Use Auto for large systems (>30 atoms).",
+        type="boolean",
+        default=False,
+        description="Determines whether the projection operators are evaluated in real space or reciprocal space.",
         category="electronic",
-        enum_values=[".FALSE.", ".TRUE.", "On", "Auto"],
+        enum_values=[".FALSE.", ".TRUE.", "Auto", "A", "On", "O"],
     ),
     "ROPT": INCARTag(
         name="ROPT",
@@ -567,6 +805,16 @@ INCAR_TAGS: Dict[str, INCARTag] = {
         category="output",
     ),
 }
+
+# The curated entries above take precedence because they contain reviewed
+# project-specific validation metadata. Every remaining official Wiki page is
+# still registered, so a documented tag is not reported as unknown; records
+# with type="unknown" intentionally skip value validation until their Wiki
+# TAGDEF can be interpreted without guessing.
+for _wiki_tag_name, _wiki_tag_metadata in OFFICIAL_WIKI_TAGS.items():
+    if _wiki_tag_name not in INCAR_TAGS:
+        INCAR_TAGS[_wiki_tag_name] = INCARTag(**cast(Dict[str, Any], _wiki_tag_metadata))
+
 
 # List of all tag names for quick reference
 INCAR_TAG_LIST: List[str] = list(INCAR_TAGS.keys())

@@ -157,7 +157,13 @@ def _workspace_documents(directory: Path) -> dict[str, str]:
     documents: dict[str, str] = {}
     for path in sorted(directory.iterdir()):
         if path.is_file() and not path.name.startswith("."):
-            documents[path.resolve().as_uri()] = _read_text(path)
+            try:
+                documents[path.resolve().as_uri()] = _read_text(path)
+            except OSError:
+                # A workspace directory can contain files owned by another
+                # process/user (especially /tmp). One unreadable peer should
+                # not prevent checking the requested INCAR.
+                continue
     return documents
 
 
