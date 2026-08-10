@@ -92,6 +92,7 @@ class VASPLanguageServer(LanguageServer):
 
         # Document cache
         self.documents: Dict[str, str] = {}
+        self.document_versions: Dict[str, int] = {}
         self.document_diagnostics: Dict[str, List[Diagnostic]] = {}
 
     def get_document_content(self, uri: str) -> Optional[str]:
@@ -217,9 +218,13 @@ def text_document_did_open(params: DidOpenTextDocumentParams):
     uri = params.text_document.uri
     content = params.text_document.text
     server.set_document_content(uri, content)
+    version = _normalise_document_version(getattr(params.text_document, "version", None))
+    if version is None:
+        version = 0
+    server.document_versions[uri] = version
 
     # Publish diagnostics
-    _publish_diagnostics(uri, content)
+    _publish_diagnostics(uri, content, version)
 
 
 @server.feature(TEXT_DOCUMENT_DID_CHANGE)
@@ -230,7 +235,13 @@ def text_document_did_change(params: DidChangeTextDocumentParams):
         previous_content = server.get_document_content(uri) or ""
         content = _apply_content_changes(previous_content, params.content_changes)
         server.set_document_content(uri, content)
-        _publish_diagnostics(uri, content)
+        version = _normalise_document_version(
+            getattr(params.text_document, "version", None)
+        )
+        if version is None:
+            version = server.document_versions.get(uri, 0) + 1
+        server.document_versions[uri] = version
+        _publish_diagnostics(uri, content, version)
 
 
 @server.feature(TEXT_DOCUMENT_DID_SAVE)
@@ -239,7 +250,7 @@ def text_document_did_save(params: DidSaveTextDocumentParams):
     uri = params.text_document.uri
     content = server.get_document_content(uri)
     if content:
-        _publish_diagnostics(uri, content)
+        _publish_diagnostics(uri, content, server.document_versions.get(uri))
 
 
 @server.feature(
@@ -626,11 +637,18 @@ def _parse_vasp_output_to_diagnostics(
     return diagnostics
 
 
-def _publish_diagnostics(uri: str, content: str):
-    """Publish diagnostics for a document."""
+def _normalise_document_version(value: Any) -> Optional[int]:
+    """Return an LSP document version, if the client supplied one."""
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    return None
+
+
+def _publish_diagnostics(uri: str, content: str, version: Optional[int] = None):
+    """Publish diagnostics for a document snapshot and its version."""
     diagnostics = server.diagnostics_provider.get_diagnostics(content, uri, server.documents)
     server.set_document_diagnostics(uri, diagnostics)
-    server.publish_diagnostics(uri, diagnostics)
+    server.publish_diagnostics(uri, diagnostics, version=version)
 
 
 def _get_file_type(uri: str) -> str:
