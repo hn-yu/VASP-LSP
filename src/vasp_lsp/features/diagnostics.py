@@ -1517,7 +1517,9 @@ class DiagnosticsProvider:
                     diagnostics.append(
                         self._parameter_info(
                             encut,
-                            f"For production calculations, ENCUT={recommended:g} eV (1.3 x ENMAX) is recommended.",
+                            f"For production calculations, ENCUT={recommended:g} eV "
+                            f"(1.3 x max POTCAR ENMAX={max_enmax:g} eV) is recommended. "
+                            "ENMAX is read from POTCAR, not an INCAR tag.",
                         )
                     )
 

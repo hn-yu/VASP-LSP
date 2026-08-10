@@ -48,16 +48,17 @@ The bundled configuration also includes a small `on_init` compatibility
 fallback that requests full-document synchronization from older VASP-LSP/pygls
 installations. New installations receive the same mode from the server itself.
 
-## Optional VASP log filetypes
+## Optional VASP filetype mappings
 
 The server can diagnose OUTCAR, OSZICAR, STDOUT, STDERR, vasp.out, and Slurm
-captures such as slurm-123.out. Neovim does not assign a useful filetype to
-all of these names by default. Add this before vim.lsp.enable("vasp_lsp") if
-you want live LSP diagnostics for them:
+captures such as slurm-123.out. It can also provide hover documentation for
+read-only metadata in POTCAR. Neovim does not assign a useful filetype to all
+of these names by default. Add this before vim.lsp.enable("vasp_lsp"):
 
 ~~~lua
 vim.filetype.add({
   filename = {
+    POTCAR = "potcar",
     OSZICAR = "vasp_log",
     STDOUT = "vasp_log",
     STDERR = "vasp_log",
@@ -68,6 +69,10 @@ vim.filetype.add({
   },
 })
 ~~~
+
+The `potcar` filetype enables hover documentation for read-only POTCAR
+metadata such as `ENMAX` and `ENMIN`. These are not INCAR keywords and are
+therefore intentionally absent from INCAR completion.
 
 OUTCAR is detected as outcar by current Neovim releases and is already
 included in the bundled LSP config.
