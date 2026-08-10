@@ -48,11 +48,26 @@ vasp-lsp --stdio
 vasp-lsp --tcp --host 127.0.0.1 --port 2087
 ```
 
-### Neovim (nvim-lspconfig)
+### Neovim (native LSP, 0.11+)
 
-```lua
-require'lspconfig'.vasp_lsp.setup{}
-```
+Neovim 0.11 uses its native vim.lsp.config/vim.lsp.enable API. Copy the
+bundled configuration and enable it once:
+
+The VASP-LSP setup does not require nvim-lspconfig by itself.
+
+~~~bash
+mkdir -p ~/.config/nvim/lsp
+cp editors/neovim/lsp/vasp_lsp.lua ~/.config/nvim/lsp/vasp_lsp.lua
+~~~
+
+~~~lua
+vim.lsp.enable("vasp_lsp")
+~~~
+
+See [the Neovim setup guide](editors/neovim/README.md) for optional log
+filetypes and troubleshooting. The legacy
+require("lspconfig").vasp_lsp.setup{} form is not the recommended setup for
+Neovim 0.11+.
 
 ## Features Details
 
