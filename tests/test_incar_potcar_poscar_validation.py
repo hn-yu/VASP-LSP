@@ -8,6 +8,7 @@ Covers issue #1 safe subset:
 """
 
 from vasp_lsp.features.diagnostics import DiagnosticsProvider
+from vasp_lsp.parsers.potcar_parser import POTCARParser
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -45,6 +46,30 @@ ENMAX =  245.345; ENMIN =  143.678
 POTCAR_PBE_SI = """PAW_PBE Si 05Jan2001
    4.00000000
 ENMAX =  245.345; ENMIN =  143.678
+"""
+
+POTCAR_WITH_VASP_METADATA_LINES = """TITEL  = PAW_PBE C 08Apr2002
+PAW radial sets
+ENMAX = 400.000; ENMIN = 300.000 eV
+TITEL  = PAW_PBE Co 02Aug2007
+PAW radial sets
+ENMAX = 267.968; ENMIN = 200.976 eV
+TITEL  = PAW_PBE H 15Jun2001
+PAW radial sets
+ENMAX = 250.000; ENMIN = 200.000 eV
+"""
+
+POSCAR_C_CO_H = """Test System
+1.0
+8.0 0.0 0.0
+0.0 8.0 0.0
+0.0 0.0 20.0
+C Co H
+1 1 1
+Direct
+0.0 0.0 0.0
+0.5 0.5 0.5
+0.1 0.1 0.1
 """
 
 
@@ -268,6 +293,23 @@ class TestPOTCARFunctionalMixing:
         diags = _get_incar_diagnostics(incar, poscar=POSCAR_SIMPLE, potcar=POTCAR_PBE_SI_O)
         msgs = [d.message.lower() for d in diags]
         assert not any("mixes functionals" in m for m in msgs)
+
+
+class TestPOTCARDatasetParsing:
+    """POTCAR metadata lines must not become phantom pseudopotential entries."""
+
+    def test_paw_radial_sets_are_not_species(self) -> None:
+        data = POTCARParser(POTCAR_WITH_VASP_METADATA_LINES).parse()
+        assert data is not None
+        assert [entry.element for entry in data.entries] == ["C", "Co", "H"]
+
+    def test_realistic_potcar_metadata_keeps_species_order_check_clean(self) -> None:
+        diagnostics = _get_incar_diagnostics(
+            "ENCUT = 520\n",
+            poscar=POSCAR_C_CO_H,
+            potcar=POTCAR_WITH_VASP_METADATA_LINES,
+        )
+        assert not any("species order" in diagnostic.message.lower() for diagnostic in diagnostics)
 
     def test_single_species_no_mixing_check(self) -> None:
         """Single-species POTCAR never triggers mixing check."""

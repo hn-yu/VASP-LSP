@@ -60,14 +60,20 @@ class POSCARData:
 class POSCARParser:
     """Parser for VASP POSCAR/CONTCAR structure files."""
 
-    def __init__(self, content: str):
+    def __init__(self, content: str, *, allow_post_coordinate_data: bool = False):
         """Initialize parser with POSCAR file content.
 
         Args:
             content: The full content of the POSCAR file.
+            allow_post_coordinate_data: Allow VASP's optional velocity and
+                MD restart sections after the ionic coordinates. This is
+                enabled by the LSP for POSCAR/CONTCAR documents, while the
+                strict default keeps the parser useful for detecting an
+                unseparated extra coordinate row.
         """
         self.content = content
         self.lines = content.split("\n")
+        self.allow_post_coordinate_data = allow_post_coordinate_data
         self.data: Optional[POSCARData] = None
         self.errors: List[Dict[str, Any]] = []
 
@@ -264,23 +270,24 @@ class POSCARParser:
                     return None
                 line_idx += 1
 
-            for extra_idx in range(line_idx, len(self.lines)):
-                extra = self.lines[extra_idx].strip()
-                if not extra or extra.startswith("#") or extra.startswith("!"):
-                    continue
-                parts = extra.split()
-                if len(parts) >= 3:
-                    try:
-                        [float(parts[0]), float(parts[1]), float(parts[2])]
-                    except ValueError:
+            if not self._has_post_coordinate_data(line_idx, total_atoms):
+                for extra_idx in range(line_idx, len(self.lines)):
+                    extra = self.lines[extra_idx].strip()
+                    if not extra or extra.startswith("#") or extra.startswith("!"):
                         continue
-                    self.errors.append(
-                        {
-                            "message": "Extra coordinate row after expected atom count",
-                            "line": extra_idx + 1,
-                            "severity": "warning",
-                        }
-                    )
+                    parts = extra.split()
+                    if len(parts) >= 3:
+                        try:
+                            [float(parts[0]), float(parts[1]), float(parts[2])]
+                        except ValueError:
+                            continue
+                        self.errors.append(
+                            {
+                                "message": "Extra coordinate row after expected atom count",
+                                "line": extra_idx + 1,
+                                "severity": "warning",
+                            }
+                        )
 
             self.data = POSCARData(
                 system_comment=system_comment,
@@ -311,6 +318,57 @@ class POSCARParser:
                 }
             )
             return None
+
+    def _has_post_coordinate_data(self, start_line: int, total_atoms: int) -> bool:
+        """Return whether the trailing lines form VASP's optional sections.
+
+        VASP writes a blank line followed by one velocity row per atom in a
+        CONTCAR produced by molecular dynamics. The optional predictor-
+        corrector block follows those velocities and may contain many more
+        numeric rows. POSCAR also permits an explicitly labelled velocity
+        block, so the LSP accepts both forms once the coordinate block has
+        been consumed.
+        """
+        if not self.allow_post_coordinate_data or start_line >= len(self.lines):
+            return False
+
+        line_index = start_line
+        first = self.lines[line_index].strip()
+
+        # A variable-cell MD restart may begin with the eight-line lattice
+        # velocity section. Its marker is documented as "Lattice velocities
+        # and vectors" and is identified by the first character in VASP.
+        if first.lower().startswith("l"):
+            if len(self.lines) - line_index < 8:
+                return False
+            line_index += 8
+            if all(not line.strip() for line in self.lines[line_index:]):
+                return True
+            first = self.lines[line_index].strip()
+
+        # VASP-written CONTCAR velocity blocks start with an empty line. When
+        # entered manually, the velocity mode can instead be labelled Direct
+        # or Cartesian (K is also accepted by VASP for Cartesian input).
+        if not first:
+            line_index += 1
+        elif first[0].lower() in {"d", "c", "k"}:
+            line_index += 1
+        else:
+            return False
+
+        for _ in range(total_atoms):
+            if line_index >= len(self.lines):
+                return False
+            parts = self.lines[line_index].split()
+            if len(parts) < 3:
+                return False
+            try:
+                [float(parts[0]), float(parts[1]), float(parts[2])]
+            except ValueError:
+                return False
+            line_index += 1
+
+        return True
 
     def get_errors(self) -> List[Dict[str, Any]]:
         """Get all parse errors.

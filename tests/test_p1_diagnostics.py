@@ -228,12 +228,11 @@ class TestUnitMetadata:
 class TestStringTypeValidation:
     """Tests for string type validation (#20)."""
 
-    def test_string_tag_with_array_value_error(self):
-        """A string tag given an array value should produce a type error."""
+    def test_string_tag_accepts_a_multiword_value(self):
+        """Whitespace in a documented string value must not create a fake array."""
         diags = _incar_diags("SYSTEM = hello world foo\n")
         msgs = [d.message for d in diags]
-        # SYSTEM is type=string, but "hello world foo" parses as a list
-        assert any("expects a single string value" in m for m in msgs)
+        assert not any("expects a single string value" in m for m in msgs)
 
 
 # ---------------------------------------------------------------------------
@@ -306,7 +305,10 @@ class TestEnumValidation:
     """Tests for enum value validation (#21)."""
 
     def test_invalid_integer_enum_error(self):
-        diags = _incar_diags("ISMEAR = 99\n")
+        # The VASP Wiki allows every positive integer as a
+        # Methfessel-Paxton order, so use a value outside the documented
+        # negative sentinels and positive-integer domain.
+        diags = _incar_diags("ISMEAR = -16\n")
         msgs = [d.message.lower() for d in diags]
         assert any("invalid value" in m and "ismear" in m for m in msgs)
 

@@ -6,6 +6,57 @@ from vasp_lsp.features.diagnostics import DiagnosticsProvider
 class TestPOSCARDiagnosticsCoverage:
     """Test coverage for POSCAR diagnostics."""
 
+    def test_contcar_md_velocity_and_predictor_blocks_are_not_extra_coordinates(self):
+        """CONTCAR MD restart sections must not be diagnosed as extra positions."""
+        provider = DiagnosticsProvider()
+        content = """Fe2 MD restart
+1.0
+10.0 0.0 0.0
+0.0 10.0 0.0
+0.0 0.0 10.0
+Fe
+2
+Direct
+0.0 0.0 0.0
+0.5 0.5 0.5
+
+0.01 0.02 0.03
+0.04 0.05 0.06
+
+1
+1.0
+0.1 0.2 0.3 0.4
+0.11 0.12 0.13
+0.14 0.15 0.16
+0.17 0.18 0.19
+0.20 0.21 0.22
+0.23 0.24 0.25
+0.26 0.27 0.28
+"""
+
+        diagnostics = provider.get_diagnostics(content, "file:///test/CONTCAR")
+
+        assert not any("extra coordinate row" in d.message.lower() for d in diagnostics)
+
+    def test_poscar_extra_coordinate_without_post_section_separator_still_warns(self):
+        """A real extra coordinate row must remain visible for a normal POSCAR."""
+        provider = DiagnosticsProvider()
+        content = """Test System
+1.0
+10.0 0.0 0.0
+0.0 10.0 0.0
+0.0 0.0 10.0
+H
+1
+Direct
+0.0 0.0 0.0
+0.5 0.5 0.5
+"""
+
+        diagnostics = provider.get_diagnostics(content, "file:///test/POSCAR")
+
+        assert any("extra coordinate row" in d.message.lower() for d in diagnostics)
+
     def test_poscar_parse_error_diagnostics(self):
         """Test diagnostics for POSCAR with parse errors."""
         provider = DiagnosticsProvider()

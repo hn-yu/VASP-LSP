@@ -87,6 +87,15 @@ class TestINCARParser:
         params = parser.parse()
         assert params["MAGMOM"].value == [5, 5, 5]
 
+    def test_parse_multiword_values_as_strings(self):
+        """Non-numeric whitespace-separated values remain one INCAR string."""
+        content = "ALGO = Old Fast\nSYSTEM = Fe2 surface"
+        parser = INCARParser(content)
+        params = parser.parse()
+
+        assert params["ALGO"].value == "Old Fast"
+        assert params["SYSTEM"].value == "Fe2 surface"
+
     def test_parse_comments_hash(self):
         """Test parsing with # comments."""
         content = """

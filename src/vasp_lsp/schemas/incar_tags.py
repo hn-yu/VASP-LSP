@@ -140,9 +140,16 @@ INCAR_TAGS: Dict[str, INCARTag] = {
         name="ISMEAR",
         type="integer",
         default=1,
-        description="Determines how the partial occupancies are set for each orbital. -5: Tetrahedron method with Blöchl corrections, -4: Tetrahedron method, -3: Smearing not used (for RPA/GW), -2: Partial occupancies read from WAVECAR/INCAR, -1: Fermi smearing, 0: Gaussian smearing, 1: Methfessel-Paxton order 1, N>1: Methfessel-Paxton order N.",
+        description=(
+            "Determines how the partial occupancies are set for each orbital. "
+            "The documented discrete values are -15, -14, -5, -4, -3, -2, "
+            "-1, and 0; every positive integer selects Methfessel-Paxton "
+            "smearing of that order."
+        ),
         category="electronic",
-        enum_values=["-5", "-4", "-3", "-2", "-1", "0", "1", "2"],
+        enum_values=["-15", "-14", "-5", "-4", "-3", "-2", "-1", "0"],
+        valid_range=(1, None),
+        source_url="https://vasp.at/wiki/ISMEAR",
     ),
     "SIGMA": INCARTag(
         name="SIGMA",
@@ -238,24 +245,69 @@ INCAR_TAGS: Dict[str, INCARTag] = {
         name="ALGO",
         type="string",
         default="Normal",
-        description="Algorithm for electronic minimization. Options: Normal (Davidson), Fast (RMM-DIIS), Very_Fast (RMM-DIIS with more aggressive settings), All (all algorithms sequentially), Damped (damped second-order Vaswani algorithm), Eigenval (optimization of one-electron energies), None (no optimization), Exact (exact diagonalization), CHI (response function calculation), G0W0R, G0W0, G0W0R, scGW0R, scGW0, scGW0R, G0W0R, BSE.",
+        description=(
+            "Selects the electronic-minimization algorithm or many-body method. "
+            "For the ordinary self-consistency-cycle algorithms, VASP also accepts "
+            "the documented first-letter form (for example V for VeryFast)."
+        ),
         category="electronic",
         enum_values=[
             "Normal",
+            "N",
             "Fast",
-            "Very_Fast",
+            "F",
+            "VeryFast",
+            "V",
             "All",
+            "A",
+            "Conjugate",
+            "C",
             "Damped",
+            "D",
+            "Subrot",
+            "S",
             "Eigenval",
             "None",
+            "Nothing",
             "Exact",
             "CHI",
+            "TDHF",
+            "Timeev",
+            "ACFDT",
+            "RPA",
+            "RPAR",
+            "ACFDTR",
+            "ACFDTRK",
+            "CRPA",
+            "EVGW0",
+            "EVGW",
+            "QPGW0",
+            "QPGW",
+            "GW0R",
+            "GWR",
+            "G0W0R",
             "G0W0",
+            "EVGW0R",
+            "BSE",
+            "GW",
+            "GW0",
+            "Old Fast",
+            "Old VeryFast",
+            "of",
+            "fo",
+            "ov",
+            "vo",
+            # VASP versions before 6 use these names for related GW methods.
             "scGW0",
             "scGW",
-            "BSE",
         ],
         case_sensitive=True,
+        version_note=(
+            "The official VASP Wiki documents Normal, Fast, VeryFast, All/Conjugate, "
+            "Damped, Subrot, Eigenval, None/Nothing, Exact, response-function methods, "
+            "and version-specific GW/RPA names."
+        ),
+        source_url="https://vasp.at/wiki/ALGO",
     ),
     "ISPIN": INCARTag(
         name="ISPIN",
@@ -276,10 +328,11 @@ INCAR_TAGS: Dict[str, INCARTag] = {
     "LORBIT": INCARTag(
         name="LORBIT",
         type="integer",
-        default=None,
+        default=0,
         description="Determines whether the PROCAR or PROOUT files are written and the format of the file. 0: no output, 1: simple output, 2: detailed output, 5: simple output + phase, 10: time-dependent DFT, 11: like 1 + phase information, 12: like 2 + phase information.",
         category="output",
         enum_values=["0", "1", "2", "5", "10", "11", "12"],
+        source_url="https://vasp.at/wiki/LORBIT",
     ),
     "ADDGRID": INCARTag(
         name="ADDGRID",
@@ -308,6 +361,7 @@ INCAR_TAGS: Dict[str, INCARTag] = {
             "In VASP.5 and newer, the aspherical contributions are included in the "
             "Kohn-Sham potential when LASPH=.TRUE."
         ),
+        source_url="https://vasp.at/wiki/LASPH",
     ),
     "LMAXMIX": INCARTag(
         name="LMAXMIX",
@@ -341,10 +395,31 @@ INCAR_TAGS: Dict[str, INCARTag] = {
     "IBRION": INCARTag(
         name="IBRION",
         type="integer",
-        default=0,
-        description="Determines how the ions are updated and moved. -1: no update (fixed positions), 0: molecular dynamics, 1: quasi-Newton (RMM-DIIS), 2: conjugate gradient, 3: damped molecular dynamics, 5: finite differences (phonons), 6: finite differences with symmetry, 7: perturbation theory, 8: perturbation theory with symmetry.",
+        default=None,
+        description=(
+            "Determines how the ions are updated and moved. -1: no update, "
+            "0: molecular dynamics, 1: RMM-DIIS, 2: conjugate gradient, "
+            "3: damped molecular dynamics, 5-8: phonons, 11: interactive "
+            "standard-input updates, 12: Python-plugin updates, 40: intrinsic "
+            "reaction coordinate, and 44: improved dimer method."
+        ),
         category="ionic",
-        enum_values=["-1", "0", "1", "2", "3", "5", "6", "7", "8"],
+        enum_values=[
+            "-1",
+            "0",
+            "1",
+            "2",
+            "3",
+            "5",
+            "6",
+            "7",
+            "8",
+            "11",
+            "12",
+            "40",
+            "44",
+        ],
+        source_url="https://vasp.at/wiki/IBRION",
     ),
     "NSW": INCARTag(
         name="NSW",
@@ -357,10 +432,11 @@ INCAR_TAGS: Dict[str, INCARTag] = {
     "EDIFFG": INCARTag(
         name="EDIFFG",
         type="float",
-        default=1e-3,
+        default=None,
         description="Convergence criterion for ionic relaxation. If EDIFFG < 0, relaxation stops when all forces are smaller than |EDIFFG| in eV/Å. If EDIFFG > 0, relaxation stops when the energy change is smaller than EDIFFG in eV.",
         category="ionic",
         unit="eV (if positive) or eV/Å (if negative)",
+        source_url="https://vasp.at/wiki/EDIFFG",
     ),
     "POTIM": INCARTag(
         name="POTIM",
@@ -374,10 +450,12 @@ INCAR_TAGS: Dict[str, INCARTag] = {
     "ISIF": INCARTag(
         name="ISIF",
         type="integer",
-        default=2,
-        description="Controls whether the stress tensor is calculated and which degrees of freedom are allowed to change. 0: MD, no stress tensor, 1: ionic relaxation, stress tensor calculated, 2: ionic relaxation, stress tensor calculated, 3: ionic + cell shape relaxation, 4: ionic + cell shape + volume relaxation, 5: cell shape + volume relaxation (constant pressure), 6: cell shape relaxation (constant volume), 7: cell volume relaxation (constant shape).",
+        default=None,
+        description="Controls whether the stress tensor is calculated and which degrees of freedom are allowed to change. Values 0-8 select the documented combinations of forces/stress, ionic positions, cell shape, and cell volume; ISIF=8 is available since VASP.6.4.1.",
         category="ionic",
-        enum_values=["0", "1", "2", "3", "4", "5", "6", "7"],
+        enum_values=["0", "1", "2", "3", "4", "5", "6", "7", "8"],
+        version_note="ISIF=8 is available since VASP.6.4.1; the default is conditional on IBRION and LHFCALC.",
+        source_url="https://vasp.at/wiki/ISIF",
     ),
     # Symmetry
     "ISYM": INCARTag(
@@ -391,6 +469,7 @@ INCAR_TAGS: Dict[str, INCARTag] = {
         ),
         category="symmetry",
         enum_values=["-1", "0", "1", "2", "3"],
+        source_url="https://vasp.at/wiki/ISYM",
     ),
     "SYMPREC": INCARTag(
         name="SYMPREC",
@@ -414,11 +493,12 @@ INCAR_TAGS: Dict[str, INCARTag] = {
     "KSPACING": INCARTag(
         name="KSPACING",
         type="float",
-        default=None,
+        default=0.5,
         description="Generate an automatic k-point mesh from a target reciprocal-space spacing. Do not use together with an explicit KPOINTS file.",
         category="electronic",
         valid_range=(0.0, None),
         unit="Å⁻¹",
+        source_url="https://vasp.at/wiki/KSPACING",
     ),
     # Parallelization
     "NCORE": INCARTag(
@@ -556,6 +636,7 @@ INCAR_TAGS: Dict[str, INCARTag] = {
         enum_values=["Low", "Medium", "Normal", "Fast", "Accurate"],
         requires=["LHFCALC"],
         case_sensitive=True,
+        source_url="https://vasp.at/wiki/PRECFOCK",
     ),
     # Van der Waals corrections
     "IVDW": INCARTag(
@@ -588,6 +669,20 @@ INCAR_TAGS: Dict[str, INCARTag] = {
             "The available meta-GGA functional names and their VASP-version availability "
             "are documented on the VASP Wiki."
         ),
+    ),
+    "SMASS": INCARTag(
+        name="SMASS",
+        type="float",
+        default=-3,
+        description=(
+            "Controls the ionic velocities during ab-initio molecular dynamics. "
+            "The documented discrete modes are -3, -2, and -1; non-negative real "
+            "values select the Nosé mass."
+        ),
+        category="molecular-dynamics",
+        valid_range=(0.0, None),
+        enum_values=["-3", "-2", "-1"],
+        source_url="https://vasp.at/wiki/SMASS",
     ),
     # DFT+U
     "LDAU": INCARTag(
@@ -641,10 +736,11 @@ INCAR_TAGS: Dict[str, INCARTag] = {
     "LNONCOLLINEAR": INCARTag(
         name="LNONCOLLINEAR",
         type="boolean",
-        default=False,
+        default=None,
         description="Switches on noncollinear magnetic calculations.",
         category="magnetism",
         version_note=("Supported since VASP.4.5; the default becomes .TRUE. when LSORBIT=.TRUE."),
+        source_url="https://vasp.at/wiki/LNONCOLLINEAR",
     ),
     "NUPDOWN": INCARTag(
         name="NUPDOWN",
@@ -656,6 +752,7 @@ INCAR_TAGS: Dict[str, INCARTag] = {
             "requests a full relaxation."
         ),
         category="magnetism",
+        source_url="https://vasp.at/wiki/NUPDOWN",
     ),
     "SAXIS": INCARTag(
         name="SAXIS",
@@ -738,26 +835,30 @@ INCAR_TAGS: Dict[str, INCARTag] = {
         name="PREC",
         type="string",
         default="Normal",
-        description="Determines the precision mode. Options: Normal (default), Accurate (more accurate forces), Single (faster, less accurate), Fast (deprecated).",
+        description="Determines the precision mode. Normal and Accurate are recommended; Single and SingleN are reduced-memory modes; Low, Medium, and High are deprecated compatibility modes.",
         category="electronic",
-        enum_values=["Normal", "Accurate", "Single", "Fast"],
+        enum_values=["Normal", "Single", "SingleN", "Accurate", "Low", "Medium", "High"],
         case_sensitive=True,
+        version_note="Normal and Accurate are available since VASP.4.5; Single is available since VASP.5.1; Low, Medium, and High are deprecated compatibility modes.",
+        source_url="https://vasp.at/wiki/PREC",
     ),
     "ISTART": INCARTag(
         name="ISTART",
         type="integer",
-        default=0,
-        description="Determines whether WAVECAR is read. 0: start from scratch, 1: read WAVECAR and continue.",
+        default=None,
+        description="Determines whether WAVECAR is read. 0: start from scratch, 1: restart with constant energy cutoff, 2: restart with constant basis set, 3: full restart with orbital and charge prediction.",
         category="electronic",
-        enum_values=["0", "1"],
+        enum_values=["0", "1", "2", "3"],
+        source_url="https://vasp.at/wiki/ISTART",
     ),
     "ICHARG": INCARTag(
         name="ICHARG",
         type="integer",
         default=None,
-        description="Determines how the initial charge density is constructed. 0: superposition of atomic charge densities, 1: read from CHGCAR, 2: constant charge density (for band structure), 11: constant charge density from CHGCAR, 12: constant charge density for non-selfconsistent calculations.",
+        description="Determines how the initial charge density is constructed. The official modes include 0, 1, 2, 4, and 5; adding 10 selects a fixed-density non-self-consistent mode, commonly written as 10, 11, or 12.",
         category="electronic",
-        enum_values=["0", "1", "2", "11", "12"],
+        enum_values=["0", "1", "2", "4", "5", "10", "11", "12"],
+        source_url="https://vasp.at/wiki/ICHARG",
     ),
     "NBANDS": INCARTag(
         name="NBANDS",
@@ -781,6 +882,7 @@ INCAR_TAGS: Dict[str, INCARTag] = {
         description="Determines whether the projection operators are evaluated in real space or reciprocal space.",
         category="electronic",
         enum_values=[".FALSE.", ".TRUE.", "Auto", "A", "On", "O"],
+        source_url="https://vasp.at/wiki/LREAL",
     ),
     "ROPT": INCARTag(
         name="ROPT",
@@ -814,6 +916,18 @@ INCAR_TAGS: Dict[str, INCARTag] = {
 for _wiki_tag_name, _wiki_tag_metadata in OFFICIAL_WIKI_TAGS.items():
     if _wiki_tag_name not in INCAR_TAGS:
         INCAR_TAGS[_wiki_tag_name] = INCARTag(**cast(Dict[str, Any], _wiki_tag_metadata))
+
+# Curated entries retain their richer descriptions and cross-tag metadata, but
+# still inherit the official Wiki URL when the local override did not specify
+# one. This keeps provenance visible for every documented tag without making
+# the runtime depend on the network.
+for _tag_name, _tag in INCAR_TAGS.items():
+    if _tag.source_url is None:
+        _official_metadata = OFFICIAL_WIKI_TAGS.get(_tag_name)
+        if isinstance(_official_metadata, dict):
+            _official_url = _official_metadata.get("source_url")
+            if isinstance(_official_url, str):
+                _tag.source_url = _official_url
 
 
 # List of all tag names for quick reference

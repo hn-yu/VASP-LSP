@@ -69,6 +69,35 @@ def _matches_boolean_enum(value: Any, enum_values: List[str], case_sensitive: bo
     return _matches_string_enum(value, non_boolean_values, case_sensitive)
 
 
+def _matches_numeric_enum(value: Any, enum_values: List[str]) -> bool:
+    """Match a numeric value against numeric enum members without stringifying it."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError):
+        return False
+    for enum_value in enum_values:
+        try:
+            if math.isclose(numeric_value, float(enum_value), rel_tol=0.0, abs_tol=1e-12):
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
+def _matches_numeric_range(tag: Any, value: Any) -> bool:
+    """Return whether a numeric value is inside a tag's inclusive range."""
+    if tag.valid_range is None or isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    min_val, max_val = tag.valid_range
+    if min_val is not None and value < min_val:
+        return False
+    if max_val is not None and value > max_val:
+        return False
+    return True
+
+
 def _is_valid_boolean_schema_value(tag: Any, value: Any) -> bool:
     """Accept bool values and documented non-boolean enum alternatives."""
     if _boolean_semantic_value(value) is not None:
@@ -720,6 +749,36 @@ class DiagnosticsProvider:
                             source="vasp-lsp",
                         )
                     )
+            elif tag.type in {"integer", "float"} and isinstance(value, (int, float)):
+                # Numeric schemas may combine discrete sentinel values with a
+                # continuous range. SMASS is the canonical example: -3, -2,
+                # and -1 have special meanings, while every real value >= 0
+                # is also documented as valid.
+                enum_matches = _matches_numeric_enum(value, tag.enum_values)
+                range_matches = _matches_numeric_range(tag, value)
+                if not (enum_matches or range_matches):
+                    allowed = ", ".join(tag.enum_values)
+                    if tag.valid_range:
+                        min_val, max_val = tag.valid_range
+                        upper = "∞" if max_val is None else str(max_val)
+                        allowed = f"{allowed}, or values from {min_val} to {upper}"
+                    diagnostics.append(
+                        Diagnostic(
+                            range=Range(
+                                start=Position(
+                                    line=param.line_number - 1,
+                                    character=param.column_start,
+                                ),
+                                end=Position(
+                                    line=param.line_number - 1,
+                                    character=param.column_end,
+                                ),
+                            ),
+                            message=f"Invalid value for {tag.name}. Allowed: {allowed}",
+                            severity=DiagnosticSeverity.Warning,
+                            source="vasp-lsp",
+                        )
+                    )
             elif tag.case_sensitive:
                 # Case-sensitive enum check: exact match required
                 str_value = str(value)
@@ -796,7 +855,7 @@ class DiagnosticsProvider:
                         )
 
         # --- Range validation for numeric values ---
-        if tag.valid_range and isinstance(value, (int, float)):
+        if tag.valid_range and isinstance(value, (int, float)) and not tag.enum_values:
             min_val, max_val = tag.valid_range
             unit_hint = f" ({tag.unit})" if tag.unit else ""
             if min_val is not None and value < min_val:
@@ -1069,6 +1128,20 @@ class DiagnosticsProvider:
                     self._parameter_info(
                         smass,
                         "SMASS is typically used with IBRION=0 (MD) or IBRION=3 (damped MD).",
+                    )
+                )
+
+        # VASP explicitly recommends ISYM=0 for molecular dynamics. Keep this
+        # as a warning rather than an invalid-value error: an omitted ISYM is
+        # legal, but the implicit symmetry default can alter the dynamics.
+        if ibrion and isinstance(ibrion.value, int) and ibrion.value == 0:
+            isym = parser.get_parameter("ISYM")
+            if isym is None or (isinstance(isym.value, int) and isym.value > 0):
+                anchor = isym or ibrion
+                diagnostics.append(
+                    self._parameter_warning(
+                        anchor,
+                        "IBRION=0 (molecular dynamics) should set ISYM=0 so symmetry does not constrain the trajectory.",
                     )
                 )
 
@@ -1569,7 +1642,11 @@ class DiagnosticsProvider:
         content = self._read_neighbor(document_uri, "POSCAR", workspace_documents)
         if content is None:
             content = self._read_neighbor(document_uri, "CONTCAR", workspace_documents)
-        return POSCARParser(content) if content is not None else None
+        return (
+            POSCARParser(content, allow_post_coordinate_data=True)
+            if content is not None
+            else None
+        )
 
     def _parse_neighbor_kpoints(
         self, document_uri: str, workspace_documents: Optional[Dict[str, str]]
@@ -1622,7 +1699,11 @@ class DiagnosticsProvider:
     def _get_poscar_diagnostics(self, content: str) -> List[Diagnostic]:
         """Get diagnostics for POSCAR files."""
         diagnostics = []
-        parser = POSCARParser(content)
+        # POSCAR/CONTCAR may legally contain velocity data after the ionic
+        # coordinates; CONTCAR from MD additionally contains predictor-
+        # corrector restart data. The parser still reports numeric rows that
+        # are not separated into a recognized optional section.
+        parser = POSCARParser(content, allow_post_coordinate_data=True)
         result = parser.parse()
 
         # Report parse errors

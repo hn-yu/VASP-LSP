@@ -311,6 +311,20 @@ def _enum_values(value_spec: str, inferred_type: str) -> Optional[List[str]]:
     return values or None
 
 
+def _valid_range(
+    value_spec: str, inferred_type: str
+) -> Optional[Tuple[float, Optional[float]]]:
+    """Extract an explicit lower-bounded numeric range from TAGDEF notation."""
+    if inferred_type not in {"integer", "float"}:
+        return None
+    clean_spec = _clean_wikitext(value_spec)
+    match = re.search(r"(?:≥|>=)\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))", clean_spec)
+    if not match:
+        return None
+    lower = float(match.group(1))
+    return (lower, None)
+
+
 def _version_note(wikitext: str) -> Optional[str]:
     notes: List[str] = []
     for line in wikitext.splitlines():
@@ -341,6 +355,9 @@ def _tag_record(title: str, wikitext: str) -> Optional[Dict[str, Any]]:
     enum_values = _enum_values(value_spec, tag_type)
     if enum_values:
         record["enum_values"] = enum_values
+    valid_range = _valid_range(value_spec, tag_type)
+    if valid_range:
+        record["valid_range"] = valid_range
     version_note = _version_note(wikitext)
     if version_note:
         record["version_note"] = version_note
