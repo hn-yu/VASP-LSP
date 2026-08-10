@@ -185,12 +185,12 @@ class TestIBRION_NSW_Conflict:
         msgs = [d.message.lower() for d in diags]
         assert not any("ibrion" in m and "nsw" in m for m in msgs)
 
-    def test_ibrion_2_nsw_0_no_warning(self) -> None:
-        """IBRION=2 with NSW=0 produces no conflict."""
+    def test_ibrion_2_nsw_0_warning(self) -> None:
+        """IBRION=2 with NSW=0 warns that no ionic step will run."""
         incar = "IBRION = 2\nNSW = 0\n"
         diags = _get_incar_diagnostics(incar)
         msgs = [d.message.lower() for d in diags]
-        assert not any("ibrion" in m and "nsw" in m for m in msgs)
+        assert any("ibrion" in m and "nsw" in m for m in msgs)
 
 
 class TestSMASS_Usage:

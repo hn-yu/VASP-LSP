@@ -15,14 +15,25 @@ from ..parsers.poscar_parser import POSCARParser
 from ..parsers.potcar_parser import POTCARParser
 from ..parsers.vasp_log_parser import VASPLogDiagnostic, VASPLogParser
 from ..rules import (
+    DFTU_LMAXMIX_FIXED_CHARGE,
+    DFTU_PARAMETERS_INCOMPLETE,
+    ELECTROSTATICS_MISSING_IDIPOL,
     ENCUT_BELOW_ENMAX,
+    HYBRID_VERYFAST_INCOMPATIBLE,
     INVALID_INCAR_TAG,
     INVALID_INCAR_VALUE,
+    IONIC_IBRION_NSW_MISMATCH,
+    IONIC_MD_MISSING_POTIM,
+    IONIC_MDALGO_REQUIRES_MD,
+    MAGMOM_SHAPE_MISMATCH,
+    NONCOLLINEAR_ISPIN_CONFLICT,
     PARALLEL_KPAR_INCOMPATIBLE,
     PARALLEL_NCORE_NPAR_CONFLICT,
     RESTART_FILE_MISMATCH,
     SMEARING_ISMEAR_SIGMA_MISMATCH,
+    SMEARING_TETRAHEDRON_REQUIRES_GAMMA,
     SPIN_MISSING_MAGMOM,
+    SYMMETRY_MD_ISYM_ZERO,
     get_rule_fix_hint,
     rule_id_for_runtime_category,
 )
@@ -45,7 +56,9 @@ def _boolean_semantic_value(value: Any) -> Optional[bool]:
     return None
 
 
-def _matches_string_enum(value: Any, enum_values: List[str], case_sensitive: bool) -> bool:
+def _matches_string_enum(
+    value: Any, enum_values: List[str], case_sensitive: bool
+) -> bool:
     """Match a non-boolean string enum using the schema's case-sensitivity rule."""
     if not isinstance(value, str):
         return False
@@ -55,16 +68,21 @@ def _matches_string_enum(value: Any, enum_values: List[str], case_sensitive: boo
     return value_upper in {enum_value.upper() for enum_value in enum_values}
 
 
-def _matches_boolean_enum(value: Any, enum_values: List[str], case_sensitive: bool) -> bool:
+def _matches_boolean_enum(
+    value: Any, enum_values: List[str], case_sensitive: bool
+) -> bool:
     """Match boolean enum members by semantic value and other members as strings."""
     boolean_value = _boolean_semantic_value(value)
     if boolean_value is not None:
         return any(
-            _boolean_semantic_value(enum_value) == boolean_value for enum_value in enum_values
+            _boolean_semantic_value(enum_value) == boolean_value
+            for enum_value in enum_values
         )
 
     non_boolean_values = [
-        enum_value for enum_value in enum_values if _boolean_semantic_value(enum_value) is None
+        enum_value
+        for enum_value in enum_values
+        if _boolean_semantic_value(enum_value) is None
     ]
     return _matches_string_enum(value, non_boolean_values, case_sensitive)
 
@@ -79,16 +97,29 @@ def _matches_numeric_enum(value: Any, enum_values: List[str]) -> bool:
         return False
     for enum_value in enum_values:
         try:
-            if math.isclose(numeric_value, float(enum_value), rel_tol=0.0, abs_tol=1e-12):
+            if math.isclose(
+                numeric_value, float(enum_value), rel_tol=0.0, abs_tol=1e-12
+            ):
                 return True
         except (TypeError, ValueError):
             continue
     return False
 
 
+def _ismear_uses_sigma(value: Any) -> bool:
+    """Return whether the documented ISMEAR mode consumes SIGMA."""
+    if not isinstance(value, int) or isinstance(value, bool):
+        return False
+    return value >= -1 or value in {-15, -14}
+
+
 def _matches_numeric_range(tag: Any, value: Any) -> bool:
     """Return whether a numeric value is inside a tag's inclusive range."""
-    if tag.valid_range is None or isinstance(value, bool) or not isinstance(value, (int, float)):
+    if (
+        tag.valid_range is None
+        or isinstance(value, bool)
+        or not isinstance(value, (int, float))
+    ):
         return False
     min_val, max_val = tag.valid_range
     if min_val is not None and value < min_val:
@@ -137,7 +168,9 @@ class DiagnosticsProvider:
         file_type = self._get_file_type(document_uri)
 
         if file_type == "INCAR":
-            return self._get_incar_diagnostics(document_content, document_uri, workspace_documents)
+            return self._get_incar_diagnostics(
+                document_content, document_uri, workspace_documents
+            )
         elif file_type == "POSCAR":
             return self._get_poscar_diagnostics(document_content)
         elif file_type == "KPOINTS":
@@ -170,7 +203,9 @@ class DiagnosticsProvider:
           - tags: parsed tag-value pairs (if INCAR)
         """
         file_type = self._get_file_type(document_uri)
-        diagnostics = self.get_diagnostics(document_content, document_uri, workspace_documents)
+        diagnostics = self.get_diagnostics(
+            document_content, document_uri, workspace_documents
+        )
 
         diag_dicts: List[Dict[str, Any]] = []
         severity_counts: Dict[str, int] = {
@@ -292,15 +327,21 @@ class DiagnosticsProvider:
             return True
         return False
 
-    def _get_vasp_log_diagnostics(self, content: str, document_uri: str) -> List[Diagnostic]:
+    def _get_vasp_log_diagnostics(
+        self, content: str, document_uri: str
+    ) -> List[Diagnostic]:
         """Get diagnostics for VASP runtime logs."""
         return [
             self._runtime_log_diagnostic_to_lsp(runtime_diagnostic)
             for runtime_diagnostic in VASPLogParser(content, document_uri).parse()
         ]
 
-    def _runtime_log_diagnostic_to_lsp(self, runtime_diagnostic: VASPLogDiagnostic) -> Diagnostic:
-        action_titles = [action.title for action in runtime_diagnostic.suggested_actions]
+    def _runtime_log_diagnostic_to_lsp(
+        self, runtime_diagnostic: VASPLogDiagnostic
+    ) -> Diagnostic:
+        action_titles = [
+            action.title for action in runtime_diagnostic.suggested_actions
+        ]
         action_suffix = ""
         if action_titles:
             action_suffix = f" Suggested actions: {', '.join(action_titles)}."
@@ -345,7 +386,8 @@ class DiagnosticsProvider:
                 for action in runtime_diagnostic.suggested_actions
             ],
             "safe_to_auto_apply": all(
-                action.safe_to_auto_apply for action in runtime_diagnostic.suggested_actions
+                action.safe_to_auto_apply
+                for action in runtime_diagnostic.suggested_actions
             ),
             "pattern_id": runtime_diagnostic.id,
         }
@@ -361,7 +403,9 @@ class DiagnosticsProvider:
         return Diagnostic(
             range=Range(
                 start=Position(line=runtime_diagnostic.line_index, character=0),
-                end=Position(line=runtime_diagnostic.line_index, character=end_character),
+                end=Position(
+                    line=runtime_diagnostic.line_index, character=end_character
+                ),
             ),
             message=f"{message_prefix}{action_suffix}",
             severity=self._runtime_severity_to_lsp(runtime_diagnostic.severity),
@@ -402,8 +446,12 @@ class DiagnosticsProvider:
 
             diagnostic = Diagnostic(
                 range=Range(
-                    start=Position(line=error["line"] - 1, character=error.get("column", 0)),
-                    end=Position(line=error["line"] - 1, character=error.get("column", 0) + 1),
+                    start=Position(
+                        line=error["line"] - 1, character=error.get("column", 0)
+                    ),
+                    end=Position(
+                        line=error["line"] - 1, character=error.get("column", 0) + 1
+                    ),
                 ),
                 message=error["message"],
                 severity=severity,
@@ -416,7 +464,9 @@ class DiagnosticsProvider:
         # error severity with the rule's stable code and metadata.
         for param_name, param in parser.get_all_parameters().items():
             if get_tag_info(param_name) is None:
-                diagnostics.append(self._invalid_incar_tag_diagnostic(param_name, param))
+                diagnostics.append(
+                    self._invalid_incar_tag_diagnostic(param_name, param)
+                )
             else:
                 tag = get_tag_info(param_name)
                 value_diagnostics = self._validate_incar_value(tag, param, content)
@@ -511,7 +561,11 @@ class DiagnosticsProvider:
                 start=Position(line=line_index, character=0),
                 end=Position(line=line_index, character=line_end),
             ),
-            message="ISMEAR >= 0 should have SIGMA set. Default SIGMA=0.2 may not be appropriate.",
+            message=(
+                "ISMEAR >= 0 should have SIGMA set. Default SIGMA=0.2 may not be appropriate."
+                if isinstance(ismear.value, int) and ismear.value >= 0
+                else f"ISMEAR={ismear.value} uses SIGMA and should set it explicitly."
+            ),
             severity=DiagnosticSeverity.Warning,
             source="vasp-lsp",
             code=SMEARING_ISMEAR_SIGMA_MISMATCH["rule_id"],
@@ -541,8 +595,8 @@ class DiagnosticsProvider:
                 end=Position(line=line_index, character=line_end),
             ),
             message=(
-                "SIGMA is set but ISMEAR < 0 (tetrahedron method). "
-                "SIGMA is not used with the tetrahedron method."
+                "SIGMA is set but the selected ISMEAR mode does not use it "
+                "(fixed-occupation/no-smearing mode); SIGMA is not used."
             ),
             severity=DiagnosticSeverity.Warning,
             source="vasp-lsp",
@@ -691,6 +745,30 @@ class DiagnosticsProvider:
             },
         )
 
+    def _rule_parameter_diagnostic(
+        self, rule: Dict[str, Any], param, message: str, severity
+    ) -> Diagnostic:
+        """Build a first-class rule diagnostic anchored on an INCAR parameter."""
+        line_index = param.line_number - 1
+        line_end = max(len(param.raw_line), 1)
+        fix_hint = get_rule_fix_hint(rule["rule_id"])
+        return Diagnostic(
+            range=Range(
+                start=Position(line=line_index, character=0),
+                end=Position(line=line_index, character=line_end),
+            ),
+            message=message,
+            severity=severity,
+            source="vasp-lsp",
+            code=rule["rule_id"],
+            data={
+                "category": rule["category"],
+                "confidence": rule["confidence"],
+                "manual_ref": rule["manual_ref"],
+                "fix_hints": [fix_hint] if fix_hint else [],
+            },
+        )
+
     def _validate_incar_value(self, tag, param, content) -> List[Diagnostic]:
         """Validate a single INCAR parameter value against schema metadata.
 
@@ -702,9 +780,13 @@ class DiagnosticsProvider:
         expected_type = tag.type
 
         # --- Type checking ---
-        if expected_type == "integer" and (not isinstance(value, int) or isinstance(value, bool)):
+        if expected_type == "integer" and (
+            not isinstance(value, int) or isinstance(value, bool)
+        ):
             diagnostics.append(
-                self._value_type_diagnostic(param, f"{tag.name} expects an integer value.")
+                self._value_type_diagnostic(
+                    param, f"{tag.name} expects an integer value."
+                )
             )
         elif expected_type == "float" and (
             not isinstance(value, (int, float)) or isinstance(value, bool)
@@ -712,13 +794,19 @@ class DiagnosticsProvider:
             diagnostics.append(
                 self._value_type_diagnostic(param, f"{tag.name} expects a float value.")
             )
-        elif expected_type == "boolean" and not _is_valid_boolean_schema_value(tag, value):
+        elif expected_type == "boolean" and not _is_valid_boolean_schema_value(
+            tag, value
+        ):
             diagnostics.append(
-                self._value_type_diagnostic(param, f"{tag.name} expects a boolean value.")
+                self._value_type_diagnostic(
+                    param, f"{tag.name} expects a boolean value."
+                )
             )
         elif expected_type == "string" and isinstance(value, list):
             diagnostics.append(
-                self._value_type_diagnostic(param, f"{tag.name} expects a single string value.")
+                self._value_type_diagnostic(
+                    param, f"{tag.name} expects a single string value."
+                )
             )
         # Array-valued INCAR tags may legitimately contain one scalar value when
         # the structure has one species or one atom, so their length is checked
@@ -727,7 +815,9 @@ class DiagnosticsProvider:
         # --- Enum validation ---
         if tag.enum_values and value is not None:
             if tag.type == "boolean":
-                enum_matches = _matches_boolean_enum(value, tag.enum_values, tag.case_sensitive)
+                enum_matches = _matches_boolean_enum(
+                    value, tag.enum_values, tag.case_sensitive
+                )
                 if not enum_matches:
                     diagnostics.append(
                         Diagnostic(
@@ -865,7 +955,9 @@ class DiagnosticsProvider:
                             start=Position(
                                 line=param.line_number - 1, character=param.column_start
                             ),
-                            end=Position(line=param.line_number - 1, character=param.column_end),
+                            end=Position(
+                                line=param.line_number - 1, character=param.column_end
+                            ),
                         ),
                         message=(
                             f"Value {value} is below minimum {min_val} for {tag.name}{unit_hint}."
@@ -881,7 +973,9 @@ class DiagnosticsProvider:
                             start=Position(
                                 line=param.line_number - 1, character=param.column_start
                             ),
-                            end=Position(line=param.line_number - 1, character=param.column_end),
+                            end=Position(
+                                line=param.line_number - 1, character=param.column_end
+                            ),
                         ),
                         message=(
                             f"Value {value} is above maximum {max_val} for {tag.name}{unit_hint}."
@@ -958,9 +1052,8 @@ class DiagnosticsProvider:
         ismear = parser.get_parameter("ISMEAR")
         sigma = parser.get_parameter("SIGMA")
 
-        if ismear and not sigma:
-            if isinstance(ismear.value, int) and ismear.value >= 0:
-                diagnostics.append(self._ismear_sigma_missing_diagnostic(ismear))
+        if ismear and not sigma and _ismear_uses_sigma(ismear.value):
+            diagnostics.append(self._ismear_sigma_missing_diagnostic(ismear))
 
         # Check NCORE and NPAR conflict -> vasp.parallel.ncore_npar_conflict
         # (#56). NCORE (cores per orbital) and NPAR (parallel band groups) are
@@ -1007,43 +1100,57 @@ class DiagnosticsProvider:
                     self._kpar_incompatible_diagnostic(kpar_band_param, kpar_band_name)
                 )
 
-        # Check LDAU requirements
+        # Check LDAU reproducibility. LDAUJ is intentionally optional: the
+        # Wiki documents its default as zero. Keep each missing parameter as a
+        # separate diagnostic so the existing LDAU quickfixes remain useful.
         ldau = parser.get_parameter("LDAU")
         if ldau and ldau.value:
             if not parser.get_parameter("LDAUTYPE"):
                 diagnostics.append(
-                    Diagnostic(
-                        range=Range(
-                            start=Position(line=ldau.line_number - 1, character=0),
-                            end=Position(line=ldau.line_number - 1, character=len(ldau.raw_line)),
-                        ),
-                        message="LDAU=.TRUE. requires LDAUTYPE to be set.",
-                        severity=DiagnosticSeverity.Warning,
-                        source="vasp-lsp",
+                    self._rule_parameter_diagnostic(
+                        DFTU_PARAMETERS_INCOMPLETE,
+                        ldau,
+                        "LDAU=.TRUE. should explicitly set LDAUTYPE for a reproducible DFT+U setup (VASP default: 2).",
+                        DiagnosticSeverity.Warning,
                     )
                 )
             if not parser.get_parameter("LDAUL"):
                 diagnostics.append(
-                    Diagnostic(
-                        range=Range(
-                            start=Position(line=ldau.line_number - 1, character=0),
-                            end=Position(line=ldau.line_number - 1, character=len(ldau.raw_line)),
-                        ),
-                        message="LDAU=.TRUE. requires LDAUL to be set.",
-                        severity=DiagnosticSeverity.Warning,
-                        source="vasp-lsp",
+                    self._rule_parameter_diagnostic(
+                        DFTU_PARAMETERS_INCOMPLETE,
+                        ldau,
+                        "LDAU=.TRUE. should explicitly set LDAUL for each POTCAR species (VASP supplies a default).",
+                        DiagnosticSeverity.Warning,
                     )
                 )
             if not parser.get_parameter("LDAUU"):
                 diagnostics.append(
-                    Diagnostic(
-                        range=Range(
-                            start=Position(line=ldau.line_number - 1, character=0),
-                            end=Position(line=ldau.line_number - 1, character=len(ldau.raw_line)),
-                        ),
-                        message="LDAU=.TRUE. requires LDAUU to be set.",
-                        severity=DiagnosticSeverity.Warning,
-                        source="vasp-lsp",
+                    self._rule_parameter_diagnostic(
+                        DFTU_PARAMETERS_INCOMPLETE,
+                        ldau,
+                        "LDAU=.TRUE. should explicitly set LDAUU for each POTCAR species (default: zero).",
+                        DiagnosticSeverity.Warning,
+                    )
+                )
+
+            icharg_for_ldau = parser.get_parameter("ICHARG")
+            lmaxmix = parser.get_parameter("LMAXMIX")
+            if (
+                icharg_for_ldau
+                and isinstance(icharg_for_ldau.value, int)
+                and icharg_for_ldau.value in (11, 12)
+                and (
+                    lmaxmix is None
+                    or not isinstance(lmaxmix.value, int)
+                    or lmaxmix.value < 4
+                )
+            ):
+                diagnostics.append(
+                    self._rule_parameter_diagnostic(
+                        DFTU_LMAXMIX_FIXED_CHARGE,
+                        lmaxmix or ldau,
+                        "DFT+U with ICHARG=11/12 should set LMAXMIX to at least 4 for d elements (6 may be needed for f elements).",
+                        DiagnosticSeverity.Warning,
                     )
                 )
 
@@ -1055,6 +1162,17 @@ class DiagnosticsProvider:
             if not parser.get_parameter("PRECFOCK"):
                 pass  # Has default
 
+        ldipol = parser.get_parameter("LDIPOL")
+        if ldipol and ldipol.value and not parser.get_parameter("IDIPOL"):
+            diagnostics.append(
+                self._rule_parameter_diagnostic(
+                    ELECTROSTATICS_MISSING_IDIPOL,
+                    ldipol,
+                    "LDIPOL=.TRUE. requires IDIPOL to select the dipole-correction direction.",
+                    DiagnosticSeverity.Warning,
+                )
+            )
+
         # Check spin-polarization and MAGMOM -> vasp.spin.missing_magmom (#53).
         # A spin-polarized workflow (ISPIN=2) needs an initial set of magnetic
         # moments via MAGMOM; without it VASP defaults the moments to unity.
@@ -1063,14 +1181,46 @@ class DiagnosticsProvider:
         ispin = parser.get_parameter("ISPIN")
         magmom = parser.get_parameter("MAGMOM")
 
-        if ispin and isinstance(ispin.value, int) and ispin.value == 2 and not magmom:
+        # A non-collinear calculation ignores the collinear ISPIN switch. VASP
+        # enables non-collinearity automatically when LSORBIT is true. Compute
+        # this before the missing-MAGMOM check so non-collinear inputs do not
+        # receive collinear ISPIN=2 advice as a duplicate false positive.
+        lsorbit = parser.get_parameter("LSORBIT")
+        lnoncollinear = parser.get_parameter("LNONCOLLINEAR")
+        noncollinear = bool(
+            (lsorbit and lsorbit.value is True)
+            or (lnoncollinear and lnoncollinear.value is True)
+        )
+
+        if (
+            not noncollinear
+            and ispin
+            and isinstance(ispin.value, int)
+            and ispin.value == 2
+            and not magmom
+        ):
             diagnostics.append(self._spin_missing_magmom_diagnostic(ispin))
 
         # Check ISMEAR=-5 (tetrahedron) with SIGMA set -> same rule (#54):
         # the tetrahedron method does not use SIGMA, so a stray SIGMA entry is a
         # mismatch. Warning severity with the rule's stable code and metadata.
-        if ismear and isinstance(ismear.value, int) and ismear.value < 0 and sigma:
+        if (
+            ismear
+            and sigma
+            and isinstance(ismear.value, int)
+            and not _ismear_uses_sigma(ismear.value)
+        ):
             diagnostics.append(self._ismear_sigma_unused_diagnostic(sigma))
+
+        if noncollinear and ispin and ispin.value == 2:
+            diagnostics.append(
+                self._rule_parameter_diagnostic(
+                    NONCOLLINEAR_ISPIN_CONFLICT,
+                    ispin,
+                    "ISPIN=2 is incompatible with non-collinear spin; ISPIN is ignored when LNONCOLLINEAR or LSORBIT is enabled.",
+                    DiagnosticSeverity.Warning,
+                )
+            )
 
         # Check LCHARG with ICHARG conflict
         lcharg = parser.get_parameter("LCHARG")
@@ -1093,7 +1243,13 @@ class DiagnosticsProvider:
         # Check LWAVE with ISTART conflict
         lwave = parser.get_parameter("LWAVE")
         istart = parser.get_parameter("ISTART")
-        if lwave and lwave.value and istart and isinstance(istart.value, int) and istart.value == 0:
+        if (
+            lwave
+            and lwave.value
+            and istart
+            and isinstance(istart.value, int)
+            and istart.value == 0
+        ):
             diagnostics.append(
                 self._parameter_info(
                     lwave,
@@ -1114,16 +1270,84 @@ class DiagnosticsProvider:
             and nsw.value == 0
         ):
             diagnostics.append(
-                self._parameter_warning(
+                self._rule_parameter_diagnostic(
+                    IONIC_IBRION_NSW_MISMATCH,
                     ibrion,
                     "IBRION=0 (molecular dynamics) with NSW=0: no MD steps will be performed.",
+                    DiagnosticSeverity.Warning,
+                )
+            )
+
+        # MDALGO is documented only for molecular dynamics (IBRION=0). When
+        # IBRION is omitted, VASP's default depends on NSW: NSW>0 selects MD,
+        # while NSW=0 selects the no-update mode. Mirror that documented
+        # default so a thermostat tag is not silently accepted in a relaxation
+        # or static calculation.
+        mdalgo = parser.get_parameter("MDALGO")
+        if mdalgo:
+            if ibrion and isinstance(ibrion.value, int):
+                effective_ibrion = ibrion.value
+            elif nsw and isinstance(nsw.value, int) and nsw.value > 0:
+                effective_ibrion = 0
+            else:
+                effective_ibrion = -1
+            if effective_ibrion != 0:
+                diagnostics.append(
+                    self._rule_parameter_diagnostic(
+                        IONIC_MDALGO_REQUIRES_MD,
+                        mdalgo,
+                        f"MDALGO is for molecular dynamics (IBRION=0), but the effective ionic mode is IBRION={effective_ibrion}; the thermostat setting will not control this run.",
+                        DiagnosticSeverity.Warning,
+                    )
+                )
+
+        if ibrion and isinstance(ibrion.value, int) and ibrion.value == 0:
+            if not parser.get_parameter("POTIM"):
+                diagnostics.append(
+                    self._rule_parameter_diagnostic(
+                        IONIC_MD_MISSING_POTIM,
+                        ibrion,
+                        "IBRION=0 (molecular dynamics) requires POTIM; VASP cannot start MD without the time step.",
+                        DiagnosticSeverity.Error,
+                    )
+                )
+
+        if ibrion and isinstance(ibrion.value, int) and ibrion.value in (1, 2, 3):
+            if not nsw or not isinstance(nsw.value, int) or nsw.value == 0:
+                diagnostics.append(
+                    self._rule_parameter_diagnostic(
+                        IONIC_IBRION_NSW_MISMATCH,
+                        ibrion,
+                        f"IBRION={ibrion.value} selects ionic updates but NSW is missing or zero; no ionic steps will be performed.",
+                        DiagnosticSeverity.Warning,
+                    )
+                )
+
+        if (
+            ibrion
+            and isinstance(ibrion.value, int)
+            and ibrion.value == -1
+            and nsw
+            and isinstance(nsw.value, int)
+            and nsw.value > 0
+        ):
+            diagnostics.append(
+                self._rule_parameter_diagnostic(
+                    IONIC_IBRION_NSW_MISMATCH,
+                    ibrion,
+                    "IBRION=-1 disables ionic updates but NSW>0 repeats the same structure; use NSW=0 for a static calculation.",
+                    DiagnosticSeverity.Warning,
                 )
             )
 
         # Check SMASS without IBRION=0 or IBRION=3
         smass = parser.get_parameter("SMASS")
         if smass:
-            if not ibrion or not isinstance(ibrion.value, int) or ibrion.value not in (0, 3):
+            if (
+                not ibrion
+                or not isinstance(ibrion.value, int)
+                or ibrion.value not in (0, 3)
+            ):
                 diagnostics.append(
                     self._parameter_info(
                         smass,
@@ -1139,9 +1363,11 @@ class DiagnosticsProvider:
             if isym is None or (isinstance(isym.value, int) and isym.value > 0):
                 anchor = isym or ibrion
                 diagnostics.append(
-                    self._parameter_warning(
+                    self._rule_parameter_diagnostic(
+                        SYMMETRY_MD_ISYM_ZERO,
                         anchor,
                         "IBRION=0 (molecular dynamics) should set ISYM=0 so symmetry does not constrain the trajectory.",
+                        DiagnosticSeverity.Warning,
                     )
                 )
 
@@ -1170,11 +1396,30 @@ class DiagnosticsProvider:
             magmom = parser.get_parameter("MAGMOM")
             if magmom:
                 magmom_count = self._expanded_array_length(magmom.value)
-                if magmom_count not in (0, total_atoms):
+                lsorbit = parser.get_parameter("LSORBIT")
+                lnoncollinear = parser.get_parameter("LNONCOLLINEAR")
+                noncollinear = bool(
+                    (lsorbit and lsorbit.value is True)
+                    or (lnoncollinear and lnoncollinear.value is True)
+                )
+                expected_magmom_count = 3 * total_atoms if noncollinear else total_atoms
+                if magmom_count not in (0, expected_magmom_count):
+                    if noncollinear:
+                        message = (
+                            f"MAGMOM has {magmom_count} entries but non-collinear spin "
+                            f"requires {expected_magmom_count} values for {total_atoms} atoms."
+                        )
+                    else:
+                        message = (
+                            f"MAGMOM has {magmom_count} entries but POSCAR contains "
+                            f"{total_atoms} atoms."
+                        )
                     diagnostics.append(
-                        self._parameter_warning(
+                        self._rule_parameter_diagnostic(
+                            MAGMOM_SHAPE_MISMATCH,
                             magmom,
-                            f"MAGMOM has {magmom_count} entries but POSCAR contains {total_atoms} atoms.",
+                            message,
+                            DiagnosticSeverity.Warning,
                         )
                     )
 
@@ -1198,11 +1443,30 @@ class DiagnosticsProvider:
                 )
             )
 
+        ismear = parser.get_parameter("ISMEAR")
+        if (
+            ismear
+            and isinstance(ismear.value, int)
+            and ismear.value in {-15, -14, -5, -4}
+            and kpoints_data
+            and kpoints_data.mode == KPOINTSMode.GAMMA_MONKHORST
+            and kpoints_data.gamma_centered is False
+        ):
+            diagnostics.append(
+                self._rule_parameter_diagnostic(
+                    SMEARING_TETRAHEDRON_REQUIRES_GAMMA,
+                    ismear,
+                    "Tetrahedron smearing should use a Gamma-centered KPOINTS mesh; the current mesh is Monkhorst-Pack shifted.",
+                    DiagnosticSeverity.Warning,
+                )
+            )
+
         if potcar_data and poscar_data:
             potcar_species = [entry.element for entry in potcar_data.entries]
             if (
                 poscar_data.atom_types
-                and poscar_data.atom_types != potcar_species[: len(poscar_data.atom_types)]
+                and poscar_data.atom_types
+                != potcar_species[: len(poscar_data.atom_types)]
             ):
                 first_param = next(iter(parser.get_all_parameters().values()), None)
                 diagnostics.append(
@@ -1234,7 +1498,9 @@ class DiagnosticsProvider:
 
         encut = parser.get_parameter("ENCUT")
         if encut and isinstance(encut.value, (int, float)) and potcar_data:
-            enmax_values = [entry.enmax for entry in potcar_data.entries if entry.enmax is not None]
+            enmax_values = [
+                entry.enmax for entry in potcar_data.entries if entry.enmax is not None
+            ]
             if enmax_values:
                 max_enmax = max(enmax_values)
                 if float(encut.value) < max_enmax:
@@ -1243,7 +1509,9 @@ class DiagnosticsProvider:
                     # below it degrades the basis set the pseudopotentials were balanced for.
                     # Upstream behavior, not a hard runtime failure, so the rule ships at warning
                     # severity with the rule's stable code and metadata.
-                    diagnostics.append(self._encut_below_enmax_diagnostic(encut, max_enmax))
+                    diagnostics.append(
+                        self._encut_below_enmax_diagnostic(encut, max_enmax)
+                    )
                 elif float(encut.value) < 1.3 * max_enmax:
                     recommended = round(1.3 * max_enmax)
                     diagnostics.append(
@@ -1255,7 +1523,9 @@ class DiagnosticsProvider:
 
         icharg = parser.get_parameter("ICHARG")
         if icharg and icharg.value in (1, 11):
-            chgcar_content = self._read_neighbor(document_uri, "CHGCAR", workspace_documents)
+            chgcar_content = self._read_neighbor(
+                document_uri, "CHGCAR", workspace_documents
+            )
             if chgcar_content is None:
                 # ICHARG in {1, 11} reads a precomputed charge density from a
                 # pre-existing CHGCAR that must be present and compatible with
@@ -1276,7 +1546,9 @@ class DiagnosticsProvider:
         if kpoints_data and kpoints_data.mode == KPOINTSMode.LINE_MODE:
             icharg = parser.get_parameter("ICHARG")
             if not icharg or icharg.value not in (11, 12):
-                anchor = icharg or next(iter(parser.get_all_parameters().values()), None)
+                anchor = icharg or next(
+                    iter(parser.get_all_parameters().values()), None
+                )
                 diagnostics.append(
                     self._workspace_info(
                         anchor,
@@ -1313,23 +1585,36 @@ class DiagnosticsProvider:
 
         lhfcalc = parser.get_parameter("LHFCALC")
         algo = parser.get_parameter("ALGO")
-        if lhfcalc and lhfcalc.value is True and algo and str(algo.value).upper() == "VERYFAST":
+        if (
+            lhfcalc
+            and lhfcalc.value is True
+            and algo
+            and str(algo.value).upper() == "VERYFAST"
+        ):
             diagnostics.append(
-                self._parameter_warning(
+                self._rule_parameter_diagnostic(
+                    HYBRID_VERYFAST_INCOMPATIBLE,
                     algo,
                     "LHFCALC=.TRUE. with ALGO=VeryFast is a runtime-risk combination; "
                     "hybrid calculations should use ALGO=Normal or a safer preconverged setup.",
+                    DiagnosticSeverity.Warning,
                 )
             )
 
         diagnostics.extend(self._check_nkred_divisibility(parser, kpoints_data))
-        diagnostics.extend(self._check_parallel_layout(parser, document_uri, workspace_documents))
-        diagnostics.extend(self._check_restart_files(parser, document_uri, workspace_documents))
+        diagnostics.extend(
+            self._check_parallel_layout(parser, document_uri, workspace_documents)
+        )
+        diagnostics.extend(
+            self._check_restart_files(parser, document_uri, workspace_documents)
+        )
         diagnostics.extend(self._check_dimer_context(parser, poscar, poscar_data))
 
         return diagnostics
 
-    def _check_nkred_divisibility(self, parser: INCARParser, kpoints_data) -> List[Diagnostic]:
+    def _check_nkred_divisibility(
+        self, parser: INCARParser, kpoints_data
+    ) -> List[Diagnostic]:
         diagnostics: List[Diagnostic] = []
         if not kpoints_data or not kpoints_data.grid:
             return diagnostics
@@ -1385,7 +1670,12 @@ class DiagnosticsProvider:
 
         ncore = parser.get_parameter("NCORE")
         ncore_value = self._integer_param_value(ncore) if ncore else None
-        if ncore and ncore_value and ncore_value > 0 and ranks_per_kpar % ncore_value != 0:
+        if (
+            ncore
+            and ncore_value
+            and ncore_value > 0
+            and ranks_per_kpar % ncore_value != 0
+        ):
             diagnostics.append(
                 self._parameter_warning(
                     ncore,
@@ -1403,8 +1693,10 @@ class DiagnosticsProvider:
     ) -> List[Diagnostic]:
         diagnostics: List[Diagnostic] = []
         istart = parser.get_parameter("ISTART")
-        if istart and istart.value in (1, 2):
-            wavecar_content = self._read_neighbor(document_uri, "WAVECAR", workspace_documents)
+        if istart and istart.value in (1, 2, 3):
+            wavecar_content = self._read_neighbor(
+                document_uri, "WAVECAR", workspace_documents
+            )
             if wavecar_content is None:
                 # ISTART >= 1 reads plane-wave coefficients from a pre-existing
                 # WAVECAR that must be present and compatible with the current
@@ -1440,7 +1732,9 @@ class DiagnosticsProvider:
         return diagnostics
 
     def _poscar_has_dimer_vector(self, poscar: POSCARParser, poscar_data) -> bool:
-        coordinate_end = poscar_data.coordinate_start_line + len(poscar_data.coordinates)
+        coordinate_end = poscar_data.coordinate_start_line + len(
+            poscar_data.coordinates
+        )
         for line in poscar.lines[coordinate_end:]:
             parts = line.strip().split()
             if len(parts) < 3:
@@ -1457,7 +1751,9 @@ class DiagnosticsProvider:
         document_uri: str,
         workspace_documents: Optional[Dict[str, str]],
     ) -> Dict[str, Any]:
-        content = self._read_neighbor(document_uri, "vasp-lsp.json", workspace_documents)
+        content = self._read_neighbor(
+            document_uri, "vasp-lsp.json", workspace_documents
+        )
         if content is None:
             return {}
         try:
@@ -1506,7 +1802,9 @@ class DiagnosticsProvider:
                 )
 
             # Also warn about recommended tags that are not set
-            missing_recommended = [tag for tag in mode.recommended_tags if tag not in all_params]
+            missing_recommended = [
+                tag for tag in mode.recommended_tags if tag not in all_params
+            ]
             if missing_recommended:
                 anchor = next(iter(all_params.values()), None)
                 tag_list = ", ".join(missing_recommended)
@@ -1540,7 +1838,9 @@ class DiagnosticsProvider:
                     try:
                         if isinstance(val, bool):
                             return False
-                        if int(val) not in [int(v) for v in expected_values if v is not True]:
+                        if int(val) not in [
+                            int(v) for v in expected_values if v is not True
+                        ]:
                             return False
                     except (ValueError, TypeError):
                         return False
@@ -1593,7 +1893,9 @@ class DiagnosticsProvider:
         return self._parameter_diagnostic(param, message, DiagnosticSeverity.Warning)
 
     def _parameter_info(self, param, message: str) -> Diagnostic:
-        return self._parameter_diagnostic(param, message, DiagnosticSeverity.Information)
+        return self._parameter_diagnostic(
+            param, message, DiagnosticSeverity.Information
+        )
 
     def _parameter_diagnostic(self, param, message: str, severity) -> Diagnostic:
         return Diagnostic(
@@ -1610,13 +1912,17 @@ class DiagnosticsProvider:
         return self._workspace_diagnostic(param, message, DiagnosticSeverity.Warning)
 
     def _workspace_info(self, param, message: str) -> Diagnostic:
-        return self._workspace_diagnostic(param, message, DiagnosticSeverity.Information)
+        return self._workspace_diagnostic(
+            param, message, DiagnosticSeverity.Information
+        )
 
     def _workspace_diagnostic(self, param, message: str, severity) -> Diagnostic:
         if param:
             return self._parameter_diagnostic(param, message, severity)
         return Diagnostic(
-            range=Range(start=Position(line=0, character=0), end=Position(line=0, character=1)),
+            range=Range(
+                start=Position(line=0, character=0), end=Position(line=0, character=1)
+            ),
             message=message,
             severity=severity,
             source="vasp-lsp",
@@ -1716,8 +2022,12 @@ class DiagnosticsProvider:
             diagnostics.append(
                 Diagnostic(
                     range=Range(
-                        start=Position(line=error["line"] - 1, character=error.get("column", 0)),
-                        end=Position(line=error["line"] - 1, character=error.get("column", 0) + 1),
+                        start=Position(
+                            line=error["line"] - 1, character=error.get("column", 0)
+                        ),
+                        end=Position(
+                            line=error["line"] - 1, character=error.get("column", 0) + 1
+                        ),
                     ),
                     message=error["message"],
                     severity=severity,
@@ -1755,7 +2065,9 @@ class DiagnosticsProvider:
                             start=Position(line=result.atom_counts_line, character=0),
                             end=Position(
                                 line=result.atom_counts_line,
-                                character=len(" ".join(str(c) for c in result.atom_counts)),
+                                character=len(
+                                    " ".join(str(c) for c in result.atom_counts)
+                                ),
                             ),
                         ),
                         message="No atoms specified in POSCAR.",
@@ -1775,7 +2087,9 @@ class DiagnosticsProvider:
                                 Diagnostic(
                                     range=Range(
                                         start=Position(line=line_num, character=0),
-                                        end=Position(line=line_num, character=len(coord_str)),
+                                        end=Position(
+                                            line=line_num, character=len(coord_str)
+                                        ),
                                     ),
                                     message=f"Direct coordinate {val:.3f} is outside typical range [0, 1].",
                                     severity=DiagnosticSeverity.Information,
@@ -1826,7 +2140,8 @@ class DiagnosticsProvider:
             diagnostics.append(
                 Diagnostic(
                     range=Range(
-                        start=Position(line=2, character=0), end=Position(line=4, character=40)
+                        start=Position(line=2, character=0),
+                        end=Position(line=4, character=40),
                     ),
                     message="POSCAR cell volume is zero; lattice vectors are linearly dependent.",
                     severity=DiagnosticSeverity.Error,
@@ -1835,13 +2150,18 @@ class DiagnosticsProvider:
             )
 
         invalid_elements = [
-            element for element in result.atom_types if not re.fullmatch(r"[A-Z][a-z]?", element)
+            element
+            for element in result.atom_types
+            if not re.fullmatch(r"[A-Z][a-z]?", element)
         ]
-        if invalid_elements and not all(element.startswith("Type") for element in invalid_elements):
+        if invalid_elements and not all(
+            element.startswith("Type") for element in invalid_elements
+        ):
             diagnostics.append(
                 Diagnostic(
                     range=Range(
-                        start=Position(line=5, character=0), end=Position(line=5, character=80)
+                        start=Position(line=5, character=0),
+                        end=Position(line=5, character=80),
                     ),
                     message=f"Invalid element symbols in POSCAR: {', '.join(invalid_elements)}.",
                     severity=DiagnosticSeverity.Warning,
@@ -1867,7 +2187,8 @@ class DiagnosticsProvider:
             diagnostics.append(
                 Diagnostic(
                     range=Range(
-                        start=Position(line=1, character=0), end=Position(line=1, character=20)
+                        start=Position(line=1, character=0),
+                        end=Position(line=1, character=20),
                     ),
                     message=f"Scale factor {result.scale_factor:g} has extreme magnitude "
                     f"(|scale| = {abs_scale:g}). Consider using 1.0.",
@@ -1916,10 +2237,16 @@ class DiagnosticsProvider:
             diagnostics.append(
                 Diagnostic(
                     range=Range(
-                        start=Position(line=max(result.coordinate_start_line - 1, 0), character=0),
+                        start=Position(
+                            line=max(result.coordinate_start_line - 1, 0), character=0
+                        ),
                         end=Position(
                             line=max(
-                                result.coordinate_start_line - 1 + max(actual, expected) - 1, 0
+                                result.coordinate_start_line
+                                - 1
+                                + max(actual, expected)
+                                - 1,
+                                0,
                             ),
                             character=40,
                         ),
@@ -1942,7 +2269,9 @@ class DiagnosticsProvider:
             for j in range(i + 1, len(result.coordinates)):
                 if j in seen:
                     continue
-                dist_sq = sum((a - b) ** 2 for a, b in zip(coord_i, result.coordinates[j]))
+                dist_sq = sum(
+                    (a - b) ** 2 for a, b in zip(coord_i, result.coordinates[j])
+                )
                 if dist_sq < tolerance * tolerance:
                     line_j = max(result.coordinate_start_line - 1 + j, 0)
                     diagnostics.append(
@@ -1996,7 +2325,8 @@ class DiagnosticsProvider:
             for j in range(i + 1, len(coords)):
                 diff_frac = [coords[i][k] - coords[j][k] for k in range(3)]
                 diff_cart = [
-                    scale * sum(vecs[r][k] * diff_frac[r] for r in range(3)) for k in range(3)
+                    scale * sum(vecs[r][k] * diff_frac[r] for r in range(3))
+                    for k in range(3)
                 ]
                 dist = math.sqrt(sum(d * d for d in diff_cart))
                 if 0 < dist < min_dist:
@@ -2034,8 +2364,12 @@ class DiagnosticsProvider:
             diagnostics.append(
                 Diagnostic(
                     range=Range(
-                        start=Position(line=error["line"] - 1, character=error.get("column", 0)),
-                        end=Position(line=error["line"] - 1, character=error.get("column", 0) + 1),
+                        start=Position(
+                            line=error["line"] - 1, character=error.get("column", 0)
+                        ),
+                        end=Position(
+                            line=error["line"] - 1, character=error.get("column", 0) + 1
+                        ),
                     ),
                     message=error["message"],
                     severity=severity,
@@ -2181,7 +2515,9 @@ class DiagnosticsProvider:
 
         # Use exact start line from parser when available
         kpt_start = (
-            result.kpoints_start_line_idx if result.kpoints_start_line_idx is not None else 3
+            result.kpoints_start_line_idx
+            if result.kpoints_start_line_idx is not None
+            else 3
         )
 
         # Check for zero-weight k-points
@@ -2215,7 +2551,9 @@ class DiagnosticsProvider:
                         Diagnostic(
                             range=Range(
                                 start=Position(line=kpoint_line, character=0),
-                                end=Position(line=kpoint_line, character=len(coord_str)),
+                                end=Position(
+                                    line=kpoint_line, character=len(coord_str)
+                                ),
                             ),
                             message=(
                                 f"K-point coordinates ({coord_str}) are outside the "
