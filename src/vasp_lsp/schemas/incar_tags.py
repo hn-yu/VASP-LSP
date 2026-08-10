@@ -813,9 +813,7 @@ INCAR_TAGS: Dict[str, INCARTag] = {
 # TAGDEF can be interpreted without guessing.
 for _wiki_tag_name, _wiki_tag_metadata in OFFICIAL_WIKI_TAGS.items():
     if _wiki_tag_name not in INCAR_TAGS:
-        INCAR_TAGS[_wiki_tag_name] = INCARTag(
-            **cast(Dict[str, Any], _wiki_tag_metadata)
-        )
+        INCAR_TAGS[_wiki_tag_name] = INCARTag(**cast(Dict[str, Any], _wiki_tag_metadata))
 
 
 # List of all tag names for quick reference

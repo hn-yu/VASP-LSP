@@ -3,6 +3,26 @@ import json
 from vasp_lsp import tool
 
 
+def test_workspace_documents_skip_unreadable_peer(tmp_path, monkeypatch) -> None:
+    readable = tmp_path / "INCAR"
+    unreadable = tmp_path / "other.out"
+    readable.write_text("ENCUT = 520\n", encoding="utf-8")
+    unreadable.write_text("not needed\n", encoding="utf-8")
+
+    original_read_text = tool._read_text
+
+    def read_text(path):
+        if path == unreadable:
+            raise PermissionError("test-only unreadable peer")
+        return original_read_text(path)
+
+    monkeypatch.setattr(tool, "_read_text", read_text)
+    documents = tool._workspace_documents(tmp_path)
+
+    assert readable.resolve().as_uri() in documents
+    assert unreadable.resolve().as_uri() not in documents
+
+
 def test_vasp_lsp_check_directory_json_and_blocking_exit(tmp_path, capsys) -> None:
     (tmp_path / "INCAR").write_text("ENCUT = high\n", encoding="utf-8")
     (tmp_path / "KPOINTS").write_text(
