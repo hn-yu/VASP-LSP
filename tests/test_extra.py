@@ -228,6 +228,16 @@ class TestCompletionProviderCoverage:
         items = provider._get_incar_completions("ENCU", "  ENCU")
         assert len(items) > 0
 
+    def test_get_incar_completions_prefers_prefix_match(self):
+        """A tag beginning with the query should outrank substring matches."""
+        provider = CompletionProvider()
+
+        items = provider._get_incar_completions("ismea", "ismea")
+
+        assert items
+        assert items[0].label == "ISMEAR"
+        assert "ELPH_ISMEAR" not in [item.label for item in items]
+
     def test_get_incar_completions_value_suggestions(self):
         """Test INCAR value suggestions."""
         provider = CompletionProvider()
