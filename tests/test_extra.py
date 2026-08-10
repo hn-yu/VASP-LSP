@@ -5,6 +5,9 @@ Focus on uncovered lines in server.py and feature files.
 
 from unittest.mock import Mock
 
+import pytest
+from lsprotocol.types import CompletionParams, Position, TextDocumentIdentifier
+
 from vasp_lsp.features.completion import CompletionProvider
 from vasp_lsp.features.diagnostics import DiagnosticsProvider
 from vasp_lsp.features.hover import HoverProvider
@@ -274,6 +277,29 @@ class TestCompletionProviderCoverage:
 
         assert result.is_incomplete is True
         assert result.items[0].label == "ENCUT"
+
+    @pytest.mark.parametrize(
+        ("content", "value"),
+        [
+            ("ALGO =V", "VeryFast"),
+            ("ISMEAR =0", "0"),
+            ("LREAL =A", "Auto"),
+        ],
+    )
+    def test_incar_value_completion_keeps_space_before_typed_value(
+        self, content, value
+    ):
+        """Value completion must preserve the INCAR ``TAG = value`` style."""
+        provider = CompletionProvider()
+        params = CompletionParams(
+            text_document=TextDocumentIdentifier(uri="file:///test/INCAR"),
+            position=Position(line=0, character=len(content)),
+        )
+
+        result = provider.get_completions(params, content, "file:///test/INCAR")
+        item = next(item for item in result.items if item.label == value)
+
+        assert item.insert_text == f" {value}"
 
     def test_get_incar_completions_no_tag(self):
         """Test INCAR completions with unknown tag."""

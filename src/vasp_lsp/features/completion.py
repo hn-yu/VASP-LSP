@@ -141,9 +141,16 @@ class CompletionProvider:
 
         else:
             # We're after '=', provide value completions
-            tag_name = line_prefix.split("=")[0].strip().upper()
+            tag_name, value_prefix = line_prefix.split("=", 1)
+            tag_name = tag_name.strip().upper()
             tag = INCAR_TAGS.get(tag_name)
-            value_insert_prefix = " " if line_prefix.endswith("=") else ""
+            # Completion may be requested after the user has already typed
+            # the first value character (for example ``ALGO =V``).  In that
+            # case the client's replacement range normally covers only the
+            # value word, so the leading space must still be included in the
+            # inserted text.  Preserve existing whitespace after '=' to
+            # avoid producing duplicate spaces for ``ALGO = ``.
+            value_insert_prefix = "" if value_prefix[:1].isspace() else " "
 
             if tag and tag.enum_values:
                 for value in tag.enum_values:
