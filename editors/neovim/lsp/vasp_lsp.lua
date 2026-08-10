@@ -32,6 +32,7 @@ return {
     local default_diagnostics_handler = vim.lsp.handlers["textDocument/publishDiagnostics"]
     local diagnostic_versions = {}
     local formatting_requests = {}
+    local diagnostic_namespace = vim.lsp.diagnostic.get_namespace(client.id)
 
     -- Neovim 0.11 accepts the LSP diagnostic `version` field but its default
     -- handler does not use it to reject late notifications. Formatting and
@@ -78,6 +79,9 @@ return {
         local request_id = data.request_id
         if request.type == "pending" then
           if request_id and vim.api.nvim_buf_is_valid(args.buf) then
+            -- Hide the old signs before the formatter changes line layout.
+            -- They are restored for a no-op format and reset for a real edit.
+            vim.diagnostic.hide(diagnostic_namespace, args.buf)
             formatting_requests[request_id] = {
               bufnr = args.buf,
               changedtick = vim.api.nvim_buf_get_changedtick(args.buf),
@@ -90,7 +94,7 @@ return {
         if request_id then
           formatting_requests[request_id] = nil
         end
-        if not pending or request.type ~= "complete" then
+        if not pending then
           return
         end
 
@@ -101,13 +105,12 @@ return {
           if not vim.api.nvim_buf_is_valid(pending.bufnr) then
             return
           end
-          if vim.api.nvim_buf_get_changedtick(pending.bufnr) == pending.changedtick then
+          if request.type == "cancel"
+            or vim.api.nvim_buf_get_changedtick(pending.bufnr) == pending.changedtick then
+            vim.diagnostic.show(diagnostic_namespace, pending.bufnr)
             return
           end
-          vim.diagnostic.reset(
-            vim.lsp.diagnostic.get_namespace(client.id),
-            pending.bufnr
-          )
+          vim.diagnostic.reset(diagnostic_namespace, pending.bufnr)
         end, 0)
       end,
     })

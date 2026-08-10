@@ -271,7 +271,11 @@ def test_bundled_neovim_config_clears_diagnostics_after_format_edit(
             "vim.api.nvim_exec_autocmds(\"LspRequest\", {buffer=test_buf, modeline=false, "
             "data={client_id=client.id, request_id=request_id, request={"
             "type=request_type, bufnr=test_buf, method=\"textDocument/formatting\"}}}) end; "
-            "request(100, \"pending\"); request(100, \"complete\"); vim.wait(25); "
+            "request(100, \"pending\"); "
+            "if sign_count() ~= 0 then "
+            'vim.api.nvim_err_writeln("VASP_LSP_FORMAT_PENDING_SIGN_REMAINS"); '
+            'vim.cmd("cquit 1") end; '
+            "request(100, \"complete\"); vim.wait(25); "
             "if #vim.diagnostic.get(test_buf) ~= 1 or sign_count() ~= 1 then "
             'vim.api.nvim_err_writeln("VASP_LSP_FORMAT_NOOP_CLEARED_DIAGNOSTIC"); '
             'vim.cmd("cquit 1") end; '
@@ -297,5 +301,6 @@ def test_bundled_neovim_config_clears_diagnostics_after_format_edit(
 
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
+    assert "VASP_LSP_FORMAT_PENDING_SIGN_REMAINS" not in output
     assert "VASP_LSP_FORMAT_NOOP_CLEARED_DIAGNOSTIC" not in output
     assert "VASP_LSP_FORMAT_STALE_DIAGNOSTIC_REMAINS" not in output
