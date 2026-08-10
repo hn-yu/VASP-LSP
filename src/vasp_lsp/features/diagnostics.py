@@ -28,6 +28,60 @@ from ..rules import (
 )
 from ..schemas.incar_tags import CALCULATION_MODES, CalculationMode, get_tag_info
 
+_BOOLEAN_TRUE_TOKENS = {".TRUE.", "TRUE", "T"}
+_BOOLEAN_FALSE_TOKENS = {".FALSE.", "FALSE", "F"}
+
+
+def _boolean_semantic_value(value: Any) -> Optional[bool]:
+    """Return the boolean meaning of a VASP boolean token, if it has one."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        token = value.strip().upper()
+        if token in _BOOLEAN_TRUE_TOKENS:
+            return True
+        if token in _BOOLEAN_FALSE_TOKENS:
+            return False
+    return None
+
+
+def _matches_string_enum(value: Any, enum_values: List[str], case_sensitive: bool) -> bool:
+    """Match a non-boolean string enum using the schema's case-sensitivity rule."""
+    if not isinstance(value, str):
+        return False
+    if case_sensitive:
+        return value in enum_values
+    value_upper = value.upper()
+    return value_upper in {enum_value.upper() for enum_value in enum_values}
+
+
+def _matches_boolean_enum(value: Any, enum_values: List[str], case_sensitive: bool) -> bool:
+    """Match boolean enum members by semantic value and other members as strings."""
+    boolean_value = _boolean_semantic_value(value)
+    if boolean_value is not None:
+        return any(
+            _boolean_semantic_value(enum_value) == boolean_value for enum_value in enum_values
+        )
+
+    non_boolean_values = [
+        enum_value for enum_value in enum_values if _boolean_semantic_value(enum_value) is None
+    ]
+    return _matches_string_enum(value, non_boolean_values, case_sensitive)
+
+
+def _is_valid_boolean_schema_value(tag: Any, value: Any) -> bool:
+    """Accept bool values and documented non-boolean enum alternatives."""
+    if _boolean_semantic_value(value) is not None:
+        return True
+    if tag.enum_values and isinstance(value, str):
+        non_boolean_values = [
+            enum_value
+            for enum_value in tag.enum_values
+            if _boolean_semantic_value(enum_value) is None
+        ]
+        return _matches_string_enum(value, non_boolean_values, tag.case_sensitive)
+    return False
+
 
 class DiagnosticsProvider:
     """Provides diagnostics (error checking) for VASP files."""
@@ -629,7 +683,7 @@ class DiagnosticsProvider:
             diagnostics.append(
                 self._value_type_diagnostic(param, f"{tag.name} expects a float value.")
             )
-        elif expected_type == "boolean" and not isinstance(value, bool):
+        elif expected_type == "boolean" and not _is_valid_boolean_schema_value(tag, value):
             diagnostics.append(
                 self._value_type_diagnostic(param, f"{tag.name} expects a boolean value.")
             )
@@ -643,7 +697,30 @@ class DiagnosticsProvider:
 
         # --- Enum validation ---
         if tag.enum_values and value is not None:
-            if tag.case_sensitive:
+            if tag.type == "boolean":
+                enum_matches = _matches_boolean_enum(value, tag.enum_values, tag.case_sensitive)
+                if not enum_matches:
+                    diagnostics.append(
+                        Diagnostic(
+                            range=Range(
+                                start=Position(
+                                    line=param.line_number - 1,
+                                    character=param.column_start,
+                                ),
+                                end=Position(
+                                    line=param.line_number - 1,
+                                    character=param.column_end,
+                                ),
+                            ),
+                            message=(
+                                f"Invalid value for {tag.name}. "
+                                f"Allowed: {', '.join(tag.enum_values)}"
+                            ),
+                            severity=DiagnosticSeverity.Warning,
+                            source="vasp-lsp",
+                        )
+                    )
+            elif tag.case_sensitive:
                 # Case-sensitive enum check: exact match required
                 str_value = str(value)
                 if str_value not in tag.enum_values:
