@@ -8,6 +8,7 @@
 # Keep this file in sync with src/vasp_lsp/rules.py.
 #
 # Upstream reference: https://www.vasp.at/wiki/index.php/INCAR
+#
 {
   "diagnostic_engine": "1.0",
   "software": "vasp",
@@ -46,15 +47,48 @@
       "fix_hint": "Add a MAGMOM tag matching your species/atom counts (see https://www.vasp.at/wiki/index.php/MAGMOM), or set ISPIN=1 if the calculation is not meant to be spin-polarized."
     },
     {
+      "rule_id": "vasp.magnetism.noncollinear_ispin_conflict",
+      "software": "vasp",
+      "severity": "warning",
+      "category": "semantic consistency",
+      "confidence": 0.95,
+      "source": "official",
+      "summary": "Reports ISPIN=2 combined with a non-collinear calculation. ISPIN is ignored in non-collinear mode, and current VASP versions reject some ISPIN=2/MAGMOM combinations when LNONCOLLINEAR is enabled.",
+      "manual_ref": "https://www.vasp.at/wiki/LNONCOLLINEAR",
+      "fix_hint": "Remove ISPIN from a non-collinear calculation and provide the initial three-component moments through MAGMOM if needed (see https://www.vasp.at/wiki/LNONCOLLINEAR and https://www.vasp.at/wiki/MAGMOM)."
+    },
+    {
+      "rule_id": "vasp.magnetism.magmom_shape_mismatch",
+      "software": "vasp",
+      "severity": "warning",
+      "category": "cross-file reference",
+      "confidence": 0.98,
+      "source": "official",
+      "summary": "Reports a MAGMOM list whose length does not match the atoms in POSCAR: one value per atom for collinear spin and three values per atom for non-collinear spin.",
+      "manual_ref": "https://www.vasp.at/wiki/MAGMOM",
+      "fix_hint": "Match MAGMOM to POSCAR atom count, using three Cartesian components per atom when LNONCOLLINEAR or LSORBIT is enabled (see https://www.vasp.at/wiki/MAGMOM)."
+    },
+    {
       "rule_id": "vasp.smearing.ismear_sigma_mismatch",
       "software": "vasp",
       "severity": "warning",
       "category": "semantic consistency",
       "confidence": 0.9,
       "source": "official",
-      "summary": "Reports an inconsistency between ISMEAR and SIGMA. For ISMEAR >= 0 (Gaussian or Methfessel-Paxton smearing) SIGMA sets the smearing width and should be declared explicitly; for ISMEAR < 0 (tetrahedron method) SIGMA is unused and should be omitted. A mismatch almost always indicates a forgotten or stray keyword in the smearing setup.",
+      "summary": "Reports an inconsistency between ISMEAR and SIGMA. For ISMEAR >= 0 (Gaussian or Methfessel-Paxton smearing) SIGMA sets the smearing width and should be declared explicitly; SIGMA is unused only for the fixed-occupation and no-smearing modes ISMEAR=-2, -3, -4, and -5. A mismatch almost always indicates a forgotten or stray keyword in the smearing setup.",
       "manual_ref": "https://www.vasp.at/wiki/index.php/ISMEAR",
-      "fix_hint": "Pair ISMEAR with an explicit SIGMA width for ISMEAR >= 0 (see https://www.vasp.at/wiki/index.php/SIGMA), or remove SIGMA when ISMEAR < 0 selects the tetrahedron method."
+      "fix_hint": "Pair ISMEAR with an explicit SIGMA width when that mode uses smearing (see https://www.vasp.at/wiki/index.php/SIGMA), or remove SIGMA for the fixed-occupation/no-smearing modes -2, -3, -4, and -5."
+    },
+    {
+      "rule_id": "vasp.smearing.tetrahedron_requires_gamma",
+      "software": "vasp",
+      "severity": "warning",
+      "category": "cross-file reference",
+      "confidence": 0.92,
+      "source": "official",
+      "summary": "Reports tetrahedron smearing with a shifted Monkhorst-Pack mesh. The VASP Wiki recommends a Gamma-centered mesh for the tetrahedron methods.",
+      "manual_ref": "https://www.vasp.at/wiki/ISMEAR",
+      "fix_hint": "Use a Gamma-centered KPOINTS mesh for tetrahedron smearing, or choose a smearing method appropriate for the current mesh (see https://www.vasp.at/wiki/ISMEAR)."
     },
     {
       "rule_id": "vasp.encut.below_enmax",
@@ -66,6 +100,94 @@
       "summary": "Reports an INCAR ENCUT value below the maximum ENMAX found in the neighbouring POTCAR evidence. Each pseudopotential dataset is shipped with a recommended plane-wave cutoff (ENMAX); running ENCUT below the largest of these degrades the basis set the pseudopotentials were balanced for and almost always indicates a too-low cutoff for the calculation.",
       "manual_ref": "https://www.vasp.at/wiki/index.php/ENCUT",
       "fix_hint": "Raise ENCUT to at least the largest POTCAR ENMAX (see https://www.vasp.at/wiki/index.php/ENCUT), or ~1.3 x ENMAX for production accuracy."
+    },
+    {
+      "rule_id": "vasp.dftu.parameters_incomplete",
+      "software": "vasp",
+      "severity": "warning",
+      "category": "semantic consistency",
+      "confidence": 0.9,
+      "source": "official",
+      "summary": "Reports LDAU=.TRUE. without explicit LDAUTYPE, LDAUL, or LDAUU. LDAUJ is optional because its documented default is zero; the other parameters should be made explicit to avoid silently running a different DFT+U setup than intended.",
+      "manual_ref": "https://www.vasp.at/wiki/LDAU",
+      "fix_hint": "Set LDAUTYPE, one LDAUL value per POTCAR species, and one LDAUU value per species. Add LDAUJ only when the chosen formulation needs a non-zero J (see https://www.vasp.at/wiki/LDAU)."
+    },
+    {
+      "rule_id": "vasp.dftu.lmaxmix_for_fixed_charge",
+      "software": "vasp",
+      "severity": "warning",
+      "category": "semantic consistency",
+      "confidence": 0.92,
+      "source": "official",
+      "summary": "Reports DFT+U fixed-charge calculations (ICHARG=11 or 12) that omit LMAXMIX or leave it below the Wiki's d-element recommendation of 4. f-element calculations may require 6.",
+      "manual_ref": "https://www.vasp.at/wiki/LMAXMIX",
+      "fix_hint": "Set LMAXMIX=4 for d elements or LMAXMIX=6 for f elements when using DFT+U with ICHARG=11/12 (see https://www.vasp.at/wiki/LMAXMIX)."
+    },
+    {
+      "rule_id": "vasp.ionic.md_missing_potim",
+      "software": "vasp",
+      "severity": "error",
+      "category": "preflight/runtime-risk",
+      "confidence": 1.0,
+      "source": "official",
+      "summary": "Reports IBRION=0 molecular dynamics without POTIM. VASP requires the MD time step and crashes immediately when it is omitted.",
+      "manual_ref": "https://www.vasp.at/wiki/POTIM",
+      "fix_hint": "Set POTIM to the intended MD time step in femtoseconds (see https://www.vasp.at/wiki/POTIM)."
+    },
+    {
+      "rule_id": "vasp.ionic.ibrion_nsw_mismatch",
+      "software": "vasp",
+      "severity": "warning",
+      "category": "semantic consistency",
+      "confidence": 0.97,
+      "source": "official",
+      "summary": "Reports an ionic-update mode with no ionic steps, or IBRION=-1 with NSW>0. In the latter case VASP repeats the same structure instead of updating it.",
+      "manual_ref": "https://www.vasp.at/wiki/IBRION",
+      "fix_hint": "Use NSW>0 for MD/relaxation modes, or set IBRION=-1 together with NSW=0 for a static calculation (see https://www.vasp.at/wiki/IBRION and https://www.vasp.at/wiki/NSW)."
+    },
+    {
+      "rule_id": "vasp.ionic.mdalgo_requires_md",
+      "software": "vasp",
+      "severity": "warning",
+      "category": "semantic consistency",
+      "confidence": 1.0,
+      "source": "official",
+      "summary": "Reports MDALGO when the effective ionic mode is not IBRION=0. The VASP Wiki defines MDALGO for molecular-dynamics calculations, so it does not configure a thermostat for static, relaxation, or phonon runs.",
+      "manual_ref": "https://vasp.at/wiki/MDALGO",
+      "fix_hint": "Set IBRION=0 for molecular dynamics, or remove MDALGO when the run is not an MD calculation (see https://vasp.at/wiki/MDALGO)."
+    },
+    {
+      "rule_id": "vasp.electrostatics.missing_idipol",
+      "software": "vasp",
+      "severity": "warning",
+      "category": "semantic consistency",
+      "confidence": 1.0,
+      "source": "official",
+      "summary": "Reports LDIPOL=.TRUE. without IDIPOL. The dipole-correction direction must be selected explicitly for the correction to be defined.",
+      "manual_ref": "https://www.vasp.at/wiki/LDIPOL",
+      "fix_hint": "Set IDIPOL=1, 2, or 3 for a slab normal, or IDIPOL=4 for an isolated molecule (see https://www.vasp.at/wiki/IDIPOL)."
+    },
+    {
+      "rule_id": "vasp.hybrid.veryfast_incompatible",
+      "software": "vasp",
+      "severity": "warning",
+      "category": "preflight/runtime-risk",
+      "confidence": 1.0,
+      "source": "official",
+      "summary": "Reports ALGO=VeryFast with LHFCALC=.TRUE.; the VASP Wiki states that VeryFast is not supported for hybrid functionals.",
+      "manual_ref": "https://www.vasp.at/wiki/ALGO",
+      "fix_hint": "Use ALGO=Normal or another hybrid-compatible algorithm (see https://www.vasp.at/wiki/ALGO)."
+    },
+    {
+      "rule_id": "vasp.symmetry.md_isym_zero",
+      "software": "vasp",
+      "severity": "warning",
+      "category": "semantic consistency",
+      "confidence": 0.95,
+      "source": "official",
+      "summary": "Reports molecular dynamics without ISYM=0. Symmetry operations can constrain or alter an MD trajectory, so the VASP Wiki recommends disabling symmetry for IBRION=0.",
+      "manual_ref": "https://www.vasp.at/wiki/ISYM",
+      "fix_hint": "Set ISYM=0 for molecular dynamics unless symmetry is deliberately part of the workflow (see https://www.vasp.at/wiki/ISYM)."
     },
     {
       "rule_id": "vasp.parallel.ncore_npar_conflict",

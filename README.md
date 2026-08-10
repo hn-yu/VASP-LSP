@@ -109,7 +109,7 @@ Safe workspace-wide rename of INCAR tags with preview validation.
 
 ### Quick Fixes
 Automatic fixes for common issues:
-- Add missing SIGMA when ISMEAR >= 0
+- Add missing SIGMA when the selected ISMEAR mode uses smearing
 - Add missing MAGMOM when ISPIN = 2
 - Add missing LDAU parameters
 - Remove conflicting NPAR/NCORE
@@ -121,13 +121,29 @@ VASP-LSP ships first-class diagnostic rules under stable `rule_id` codes. The
 catalog is published as `rules/diagnostics.yaml` and can be consumed by OpenQC
 and other tooling without importing the Python package.
 
+The current catalog contains 21 conservative semantic/runtime rules. The
+separate INCAR schema contains 611 recognized tags, including 610 imported
+from the official VASP Wiki tag category; an unrecognized tag remains an
+Error rather than being downgraded to hide schema gaps.
+
 | Rule ID | Severity | Category | Source | Summary |
 | --- | --- | --- | --- | --- |
 | `vasp.incar.invalid_tag` | error | schema | official | Unknown INCAR tag (typo or stale name). |
 | `vasp.incar.invalid_value` | error | schema | official | INCAR value does not match the tag's declared type. |
 | `vasp.spin.missing_magmom` | warning | semantic consistency | official | `ISPIN=2` without an explicit `MAGMOM`. |
+| `vasp.magnetism.noncollinear_ispin_conflict` | warning | semantic consistency | official | `ISPIN=2` combined with non-collinear spin. |
+| `vasp.magnetism.magmom_shape_mismatch` | warning | cross-file reference | official | `MAGMOM` shape does not match POSCAR and spin mode. |
 | `vasp.smearing.ismear_sigma_mismatch` | warning | semantic consistency | official | Inconsistent `ISMEAR`/`SIGMA` pair. |
+| `vasp.smearing.tetrahedron_requires_gamma` | warning | cross-file reference | official | Tetrahedron smearing with a shifted Monkhorst-Pack mesh. |
 | `vasp.encut.below_enmax` | warning | cross-file reference | official | `ENCUT` below the largest POTCAR `ENMAX`. |
+| `vasp.dftu.parameters_incomplete` | warning | semantic consistency | official | `LDAU=.TRUE.` without explicit `LDAUTYPE`/`LDAUL`/`LDAUU`; `LDAUJ` remains optional. |
+| `vasp.dftu.lmaxmix_for_fixed_charge` | warning | semantic consistency | official | DFT+U fixed-charge mode without sufficient `LMAXMIX`. |
+| `vasp.ionic.md_missing_potim` | error | preflight/runtime-risk | official | `IBRION=0` without the required MD timestep `POTIM`. |
+| `vasp.ionic.ibrion_nsw_mismatch` | warning | semantic consistency | official | `IBRION` and `NSW` request incompatible ionic work. |
+| `vasp.ionic.mdalgo_requires_md` | warning | semantic consistency | official | `MDALGO` used outside `IBRION=0` molecular dynamics. |
+| `vasp.electrostatics.missing_idipol` | warning | semantic consistency | official | `LDIPOL=.TRUE.` without `IDIPOL`. |
+| `vasp.hybrid.veryfast_incompatible` | warning | preflight/runtime-risk | official | `ALGO=VeryFast` with a hybrid functional. |
+| `vasp.symmetry.md_isym_zero` | warning | semantic consistency | official | MD without the recommended `ISYM=0`. |
 | `vasp.parallel.ncore_npar_conflict` | warning | preflight/runtime-risk | official | Both `NCORE` and `NPAR` declared. |
 | `vasp.parallel.kpar_incompatible` | warning | semantic consistency | official | `KPAR` combined with band-level `NCORE`/`NPAR`. |
 | `vasp.restart.file_mismatch` | warning | cross-file reference | official | Restart intent without the matching `WAVECAR`/`CHGCAR`. |
