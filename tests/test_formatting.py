@@ -74,6 +74,24 @@ NCORE=4
         assert "# Other Parameters" in result[0].new_text
         assert "UNKNOWN_TAG" in result[0].new_text
 
+    def test_format_incar_places_system_first_and_uses_schema_categories(self, formatter):
+        """Known schema tags should not fall into the generic Other group."""
+        content = """GGA = PE
+ICHARG = 2
+ISTART = 0
+MDALGO = 2
+SYSTEM = Fe2 MD
+"""
+
+        result = formatter._format_incar(content)
+        text = result[0].new_text
+
+        assert text.splitlines()[0].startswith("SYSTEM =")
+        assert text.index("SYSTEM =") < text.index("# Electronic Structure")
+        assert "# Exchange-Correlation" in text
+        assert "# Molecular Dynamics" in text
+        assert "# Other Parameters" not in text
+
 
 class TestPOSCARFormatting:
     """Test POSCAR file formatting."""

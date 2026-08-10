@@ -4,13 +4,86 @@ Provides document formatting capabilities for VASP input files.
 """
 
 import re
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from lsprotocol.types import Position, Range, TextEdit
 
 from ..parsers.incar_parser import INCARParser
+from ..schemas.incar_tags import get_tag_info
 
 _INCAR_ASSIGNMENT_RE = re.compile(r"^(\s*)([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$")
+
+_INCAR_CATEGORY_GROUPS = {
+    "accuracy": "Accuracy",
+    "calculation setup": "General Setup",
+    "charge density": "Output",
+    "crystal momentum": "Electronic Structure",
+    "density mixing": "Mixing and Convergence",
+    "electronic": "Electronic Structure",
+    "electronic ground state properties": "Electronic Structure",
+    "electronic minimization": "Electronic Structure",
+    "electronic occupancy": "Electronic Structure",
+    "electrostatics": "Electrostatics",
+    "exchange correlation": "Exchange-Correlation",
+    "exchange correlation functionals": "Exchange-Correlation",
+    "forces": "Ionic Relaxation",
+    "general": "General Setup",
+    "ionic": "Ionic Relaxation",
+    "ionic minimization": "Ionic Relaxation",
+    "magnetism": "Magnetism",
+    "many body perturbation theory": "Many-Body Methods",
+    "molecular dynamics": "Molecular Dynamics",
+    "molecules": "Electrostatics",
+    "mixing": "Mixing and Convergence",
+    "output": "Output",
+    "parallel": "Parallelization",
+    "performance": "Parallelization",
+    "projector augmented wave method": "Accuracy",
+    "symmetry": "Symmetry",
+    "thermostats": "Molecular Dynamics",
+    "transition states": "Ionic Relaxation",
+    "van der waals functionals": "Exchange-Correlation",
+}
+
+# A few tags have a useful UI grouping that is more specific than their broad
+# Wiki category. Keep these overrides small; all other known tags use their
+# official schema category, and genuinely unknown tags remain in Other.
+_INCAR_GROUP_OVERRIDES = {
+    "ALGO": "Mixing and Convergence",
+    "IALGO": "Mixing and Convergence",
+    "LDIAG": "Mixing and Convergence",
+    "AMIX": "Mixing and Convergence",
+    "BMIX": "Mixing and Convergence",
+    "AMIX_MAG": "Mixing and Convergence",
+    "BMIX_MAG": "Mixing and Convergence",
+    "AMIN": "Mixing and Convergence",
+    "WC": "Mixing and Convergence",
+    "INIMIX": "Mixing and Convergence",
+    "MAXMIX": "Mixing and Convergence",
+    "MIXPRE": "Mixing and Convergence",
+    "NCORE": "Parallelization",
+    "NPAR": "Parallelization",
+    "KPAR": "Parallelization",
+    "LPLANE": "Parallelization",
+    "LSCALU": "Parallelization",
+    "NSIM": "Parallelization",
+}
+
+_INCAR_GROUP_ORDER = [
+    "Electronic Structure",
+    "Exchange-Correlation",
+    "Accuracy",
+    "Ionic Relaxation",
+    "Molecular Dynamics",
+    "Magnetism",
+    "Symmetry",
+    "Mixing and Convergence",
+    "Output",
+    "Electrostatics",
+    "Parallelization",
+    "General Setup",
+    "Many-Body Methods",
+]
 
 
 class FormattingProvider:
@@ -113,116 +186,56 @@ class FormattingProvider:
         if not params:
             return []
 
-        formatted_lines = []
-        formatted_lines.append("# VASP INCAR file")
-        formatted_lines.append("")
-
-        electronic = []
-        ionic = []
-        mixing = []
-        parallel = []
-        other = []
-
-        electronic_tags = {
-            "PREC",
-            "ISPIN",
-            "MAGMOM",
-            "NELM",
-            "NELMIN",
-            "NELMDL",
-            "EDIFF",
-            "LREAL",
-            "ENCUT",
-            "ENAUG",
-            "ISMEAR",
-            "SIGMA",
-            "LWAVE",
-            "LCHARG",
-            "LVTOT",
-            "LVHAR",
-            "LELF",
-            "LORBIT",
-            "NEDOS",
-            "EMIN",
-            "EMAX",
-            "ISYM",
-            "SYMPREC",
-            "NBANDS",
-            "NWRITE",
-            "LASPH",
-            "METAGGA",
-            "LHFCALC",
-            "HFSCREEN",
-            "PRECFOCK",
-            "LDAU",
-            "LDAUTYPE",
-            "LDAUL",
-            "LDAUU",
-            "LDAUJ",
-        }
-
-        ionic_tags = {
-            "IBRION",
-            "NSW",
-            "ISIF",
-            "PSTRESS",
-            "EDIFFG",
-            "POTIM",
-            "SMASS",
-            "TEBEG",
-            "TEEND",
-            "NFREE",
-            "POMASS",
-            "ZVAL",
-        }
-
-        mixing_tags = {
-            "ALGO",
-            "IALGO",
-            "LDIAG",
-            "BMIX",
-            "AMIX",
-            "BMIX_MAG",
-            "AMIX_MAG",
-            "AMIN",
-            "WC",
-            "INIMIX",
-            "MAXMIX",
-            "MIXPRE",
-        }
-
-        parallel_tags = {"NCORE", "NPAR", "KPAR", "LPLANE", "LSCALU", "NSIM"}
+        system: List[Any] = []
+        groups: Dict[str, List[Any]] = {}
 
         for name, param in params.items():
-            if name in electronic_tags:
-                electronic.append(param)
-            elif name in ionic_tags:
-                ionic.append(param)
-            elif name in mixing_tags:
-                mixing.append(param)
-            elif name in parallel_tags:
-                parallel.append(param)
-            else:
-                other.append(param)
+            if name == "SYSTEM":
+                system.append(param)
+                continue
+            group_name = self._incar_display_group(name)
+            groups.setdefault(group_name, []).append(param)
+
+        # When SYSTEM is present, make it the literal first line of the
+        # formatted INCAR. Without SYSTEM retain the generated file header.
+        formatted_lines = []
+        if not system:
+            formatted_lines.extend(["# VASP INCAR file", ""])
 
         all_params = list(params.values())
         max_tag_len = max(len(p.name) for p in all_params) if all_params else 0
 
-        def format_group(name: str, group):
+        def format_parameter(param) -> None:
+            value_str = self._format_value(param.value)
+            formatted_lines.append(f"{param.name:<{max_tag_len}} = {value_str}")
+
+        def format_group(name: str, group) -> None:
             if not group:
                 return
             formatted_lines.append(f"# {name}")
             for param in sorted(group, key=lambda x: x.name):
-                value_str = self._format_value(param.value)
-                line = f"{param.name:<{max_tag_len}} = {value_str}"
-                formatted_lines.append(line)
+                format_parameter(param)
             formatted_lines.append("")
 
-        format_group("Electronic Structure", electronic)
-        format_group("Ionic Relaxation", ionic)
-        format_group("Mixing and Convergence", mixing)
-        format_group("Parallelization", parallel)
-        format_group("Other Parameters", other)
+        # SYSTEM is a human-readable calculation label, so keep it as the
+        # first assignment instead of hiding it in a generic category.
+        for param in sorted(system, key=lambda x: x.name):
+            format_parameter(param)
+        if system:
+            formatted_lines.append("")
+
+        for group_name in _INCAR_GROUP_ORDER:
+            format_group(group_name, groups.pop(group_name, []))
+
+        for group_name in sorted(groups):
+            if group_name == "Other Parameters":
+                continue
+            format_group(group_name, groups[group_name])
+
+        if "Other Parameters" in groups:
+            # Keep the fallback section last, after all schema-backed groups.
+            other = groups.pop("Other Parameters")
+            format_group("Other Parameters", other)
 
         if formatted_lines and formatted_lines[-1] == "":
             formatted_lines.pop()
@@ -249,6 +262,20 @@ class FormattingProvider:
         elif isinstance(value, (list, tuple)):
             return " ".join(str(v) for v in value)
         return str(value)
+
+    def _incar_display_group(self, name: str) -> str:
+        """Map a tag to a readable group using its schema category."""
+        override = _INCAR_GROUP_OVERRIDES.get(name)
+        if override:
+            return override
+
+        tag = get_tag_info(name)
+        if tag is None:
+            return "Other Parameters"
+
+        category = tag.category.strip()
+        category_key = re.sub(r"[_-]+", " ", category).casefold()
+        return _INCAR_CATEGORY_GROUPS.get(category_key, category.replace("_", " ").title())
 
     def _format_poscar(self, content: str) -> List[TextEdit]:
         """Format POSCAR file content.
