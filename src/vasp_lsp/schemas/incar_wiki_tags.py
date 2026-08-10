@@ -6252,6 +6252,7 @@ OFFICIAL_WIKI_TAGS = {
         "category": "Molecular dynamics",
         "source_url": "https://vasp.at/wiki/SMASS",
         "enum_values": ["-3", "-2", "-1"],
+        "valid_range": (0.0, None),
     },
     "SMBJ": {
         "name": "SMBJ",

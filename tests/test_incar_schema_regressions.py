@@ -101,6 +101,82 @@ def test_lreal_accepts_vasp_boolean_and_string_values(value, expected):
     assert not [d for d in diagnostics if "LREAL" in d.message]
 
 
+@pytest.mark.parametrize("value", ["V", "VeryFast", "Fast", "Normal"])
+def test_algo_accepts_vasp_documented_short_and_full_values(value):
+    """ALGO follows the VASP Wiki's first-letter rule for ordinary algorithms."""
+    diagnostics = _incar_diagnostics(f"ALGO = {value}")
+    assert not any(
+        "ALGO" in diagnostic.message and "Invalid" in diagnostic.message
+        for diagnostic in diagnostics
+    )
+
+
+@pytest.mark.parametrize(
+    ("tag", "value"),
+    [
+        ("ALGO", "BSE"),
+        ("PREC", "SingleN"),
+        ("PREC", "Low"),
+        ("ISTART", "2"),
+        ("ISTART", "3"),
+        ("ICHARG", "4"),
+        ("ICHARG", "5"),
+        ("ICHARG", "10"),
+        ("ICHARG", "11"),
+        ("ISMEAR", "-15"),
+        ("ISMEAR", "-14"),
+        ("ISMEAR", "3"),
+        ("IBRION", "11"),
+        ("IBRION", "44"),
+        ("ISIF", "8"),
+    ],
+)
+def test_common_official_value_domains_do_not_false_positive(tag, value):
+    """The local overrides must not reject current Wiki-documented values."""
+    diagnostics = _incar_diagnostics(f"{tag} = {value}")
+    assert not any(
+        tag in diagnostic.message
+        and ("Invalid" in diagnostic.message or "expects" in diagnostic.message)
+        for diagnostic in diagnostics
+    ), diagnostics
+
+
+def test_algo_still_rejects_an_undocumented_value():
+    diagnostics = _incar_diagnostics("ALGO = NotAnAlgorithm")
+    assert any("Invalid" in diagnostic.message and "ALGO" in diagnostic.message for diagnostic in diagnostics)
+
+
+@pytest.mark.parametrize("value", ["-3", "-2", "-1", "0", "0.5", "40"])
+def test_smass_accepts_documented_negative_modes_and_nonnegative_real_values(value):
+    """SMASS accepts the three documented modes or any real value >= 0."""
+    diagnostics = _incar_diagnostics(f"SMASS = {value}\nIBRION = 0")
+    assert not any(
+        "SMASS" in diagnostic.message
+        and ("Invalid" in diagnostic.message or "expects" in diagnostic.message)
+        for diagnostic in diagnostics
+    )
+
+
+@pytest.mark.parametrize("value", ["-4", "-2.5", "maybe"])
+def test_smass_rejects_values_outside_the_wiki_domain(value):
+    diagnostics = _incar_diagnostics(f"SMASS = {value}\nIBRION = 0")
+    assert any(
+        "SMASS" in diagnostic.message
+        and ("Invalid" in diagnostic.message or "expects" in diagnostic.message)
+        for diagnostic in diagnostics
+    )
+
+
+def test_md_without_isym_warns_to_disable_symmetry():
+    diagnostics = _incar_diagnostics("IBRION = 0\nNSW = 100\nPOTIM = 1\n")
+    assert any("ISYM=0" in diagnostic.message for diagnostic in diagnostics)
+
+
+def test_md_with_isym_zero_has_no_symmetry_advice():
+    diagnostics = _incar_diagnostics("IBRION = 0\nNSW = 100\nPOTIM = 1\nISYM = 0\n")
+    assert not any("ISYM=0" in diagnostic.message for diagnostic in diagnostics)
+
+
 def test_common_missing_tags_are_known_and_have_expected_parsed_types():
     content = """\
 ISYM = 0
@@ -139,6 +215,13 @@ def test_common_tags_still_reject_obviously_invalid_values(assignment):
 def test_common_dft_schema_audit_tags_are_present():
     missing = [name for name in COMMON_AUDIT_TAGS if get_tag_info(name) is None]
     assert missing == []
+
+
+def test_common_dft_schema_audit_tags_have_official_provenance():
+    for name in COMMON_AUDIT_TAGS:
+        tag = get_tag_info(name)
+        assert tag is not None
+        assert tag.source_url == f"https://vasp.at/wiki/{name}"
 
 
 def test_official_wiki_catalog_is_loaded_without_lowering_unknown_tag_severity():

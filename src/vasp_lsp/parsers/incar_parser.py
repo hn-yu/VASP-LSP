@@ -156,6 +156,21 @@ class INCARParser:
         # Handle array values (space-separated)
         if " " in value_str:
             parts = value_str.split()
+            # A whitespace-separated value is an array only when every token
+            # is numeric (or uses VASP's n*value repetition syntax). This keeps
+            # documented multi-word strings such as ``ALGO = Old Fast`` and
+            # normal SYSTEM labels intact while preserving MAGMOM arrays.
+            numeric_or_repeated = re.compile(
+                r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][+-]?\d+)?$"
+            )
+            repeated_numeric = re.compile(
+                r"^\d+\*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][+-]?\d+)?$"
+            )
+            if not all(
+                numeric_or_repeated.fullmatch(part) or repeated_numeric.fullmatch(part)
+                for part in parts
+            ):
+                return value_str
             parsed_parts: List[Union[int, float, str]] = []
             for part in parts:
                 try:
