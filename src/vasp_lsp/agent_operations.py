@@ -26,6 +26,7 @@ OPERATIONS = (
     "rules",
     "describe",
     "schema",
+    "schema-audit",
     "section",
     "examples",
     "next-tokens",

@@ -452,16 +452,18 @@ Gamma
         assert any("not positive" in d.message.lower() for d in diags)
 
     def test_sparse_grid(self) -> None:
-        """Existing check: sparse grid produces warning."""
+        """A sparse grid is only a convergence hint, not an error/warning."""
         provider = DiagnosticsProvider()
         content = """Automatic
 0
 Gamma
 1 1 1
 0 0 0
-"""
+        """
         diags = provider.get_diagnostics(content, "file:///test/KPOINTS")
-        assert any("very sparse" in d.message.lower() for d in diags)
+        sparse = [d for d in diags if "very sparse" in d.message.lower()]
+        assert len(sparse) == 1
+        assert sparse[0].severity == DiagnosticSeverity.Information
 
     def test_weights_sum_not_one(self) -> None:
         """Existing check: weights not summing to 1.0 produces info."""

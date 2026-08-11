@@ -18,6 +18,7 @@ from lsprotocol.types import (
     Diagnostic,
     DiagnosticSeverity,
     DidChangeTextDocumentParams,
+    DidCloseTextDocumentParams,
     DidOpenTextDocumentParams,
     DidSaveTextDocumentParams,
     DocumentFormattingParams,
@@ -54,6 +55,7 @@ from vasp_lsp.server import (
     references,
     rename,
     text_document_did_change,
+    text_document_did_close,
     text_document_did_open,
     text_document_did_save,
     workspace_symbol,
@@ -320,6 +322,42 @@ class TestDocumentSynchronization:
         text_document_did_save(_make_did_save("file:///workspace/other"))
         # Should not raise and should not publish for unknown URIs
         assert "file:///workspace/other" not in server.published_diagnostics
+
+    def test_did_save_republishes_empty_cached_document(self, server: _CaptureServer) -> None:
+        """Saving an empty buffer must clear diagnostics instead of keeping stale signs."""
+        text_document_did_open(_make_did_open(INCAR_URI, "BADTAG = 1"))
+        server.set_document_content(INCAR_URI, "")
+        server.set_document_diagnostics(
+            INCAR_URI,
+            [
+                Diagnostic(
+                    range=Range(
+                        start=Position(line=0, character=0),
+                        end=Position(line=0, character=1),
+                    ),
+                    message="stale",
+                )
+            ],
+        )
+        server.published_diagnostics.clear()
+
+        text_document_did_save(_make_did_save(INCAR_URI))
+
+        assert INCAR_URI in server.published_diagnostics
+        assert server.published_diagnostics[INCAR_URI] == []
+
+    def test_did_close_clears_document_state(self, server: _CaptureServer) -> None:
+        """Closing a document releases its content, version, and diagnostics."""
+        text_document_did_open(_make_did_open(INCAR_URI, "BADTAG = 1", version=4))
+        assert server.get_document_content(INCAR_URI) is not None
+
+        text_document_did_close(
+            DidCloseTextDocumentParams(text_document=TextDocumentIdentifier(uri=INCAR_URI))
+        )
+
+        assert server.get_document_content(INCAR_URI) is None
+        assert server.get_document_diagnostics(INCAR_URI) == []
+        assert INCAR_URI not in server.document_versions
 
 
 # ===========================================================================

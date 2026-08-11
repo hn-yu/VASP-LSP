@@ -30,6 +30,10 @@ VASP-LSP provides intelligent code editing features for VASP calculation input f
 pip install vasp-lsp
 ```
 
+To install this fork instead, use `uv tool install
+git+https://github.com/hn-yu/VASP-LSP.git` or run `uv tool install --force .`
+from a local clone.
+
 ### VSCode Extension
 
 A VSCode extension is available in `editors/vscode/`. See the [extension README](editors/vscode/README.md) for installation instructions.
@@ -173,6 +177,7 @@ vasp-lsp-tool explain vasp.log.symmetry_failure
 # DSL overview, keyword schema, minimal examples, and next-token guidance.
 vasp-lsp-describe
 vasp-lsp-schema ENCUT
+vasp-lsp-schema-audit
 vasp-lsp-examples static
 vasp-lsp-tool next-tokens ISMEAR
 
@@ -232,6 +237,16 @@ python scripts/verify_release.py --tag v0.4.5
 python scripts/smoke_test_wheel.py --wheel dist/vasp_lsp-0.4.5-py3-none-any.whl
 ```
 
+Before releasing a schema update, run the offline provenance audit:
+
+```bash
+vasp-lsp-schema-audit
+```
+
+The audit does not access the network. To refresh the checked-in catalog from
+the official Wiki, use `python scripts/update_incar_wiki_schema.py`, review
+the generated diff, and then run the audit and test suite.
+
 
 ## Code Quality
 
@@ -240,7 +255,7 @@ The project maintains high code quality through:
 - **Code cleanup** - Dead code and unreachable branches removed.
 - **Static analysis** - Linting with Ruff, formatting with Black, type checking with mypy.
 - **Type hints** - Full type annotations for better IDE support.
-- **992 tests** covering formatting, diagnostics, completion, hover, navigation, rename, code actions, and validate commands.
+- **1,100+ tests** covering formatting, diagnostics, completion, hover, navigation, rename, code actions, schema integrity, workspace context, and validate commands.
 
 ## License
 

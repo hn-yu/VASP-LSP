@@ -18,6 +18,7 @@ from lsprotocol.types import (
     TEXT_DOCUMENT_COMPLETION,
     TEXT_DOCUMENT_DEFINITION,
     TEXT_DOCUMENT_DID_CHANGE,
+    TEXT_DOCUMENT_DID_CLOSE,
     TEXT_DOCUMENT_DID_OPEN,
     TEXT_DOCUMENT_DID_SAVE,
     TEXT_DOCUMENT_DOCUMENT_SYMBOL,
@@ -35,6 +36,7 @@ from lsprotocol.types import (
     DefinitionParams,
     Diagnostic,
     DidChangeTextDocumentParams,
+    DidCloseTextDocumentParams,
     DidOpenTextDocumentParams,
     DidSaveTextDocumentParams,
     DocumentFormattingParams,
@@ -65,9 +67,14 @@ from .features.formatting import FormattingProvider
 from .features.hover import HoverProvider
 from .features.navigation import DocumentSymbolsProvider
 from .features.quickfixes import QuickFixesProvider
+from .workspace import document_kind
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+# Keep the stdio server and simple CLI flags quiet by default.  In particular,
+# pygls emits feature-registration messages at INFO during module import; they
+# are useful only when a caller explicitly configures logging and otherwise
+# make ``vasp-lsp --version`` look like a failed command.
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
@@ -93,6 +100,7 @@ class VASPLanguageServer(LanguageServer):
         # Document cache
         self.documents: Dict[str, str] = {}
         self.document_versions: Dict[str, int] = {}
+        self.diagnostic_versions: Dict[str, int] = {}
         self.document_diagnostics: Dict[str, List[Diagnostic]] = {}
 
     def get_document_content(self, uri: str) -> Optional[str]:
@@ -244,12 +252,22 @@ def text_document_did_change(params: DidChangeTextDocumentParams):
         _publish_diagnostics(uri, content, version)
 
 
+@server.feature(TEXT_DOCUMENT_DID_CLOSE)
+def text_document_did_close(params: DidCloseTextDocumentParams):
+    """Release all server state for a closed document."""
+    uri = params.text_document.uri
+    server.documents.pop(uri, None)
+    server.document_versions.pop(uri, None)
+    server.diagnostic_versions.pop(uri, None)
+    server.document_diagnostics.pop(uri, None)
+
+
 @server.feature(TEXT_DOCUMENT_DID_SAVE)
 def text_document_did_save(params: DidSaveTextDocumentParams):
     """Handle document save."""
     uri = params.text_document.uri
     content = server.get_document_content(uri)
-    if content:
+    if content is not None:
         _publish_diagnostics(uri, content, server.document_versions.get(uri))
 
 
@@ -646,6 +664,17 @@ def _normalise_document_version(value: Any) -> Optional[int]:
 
 def _publish_diagnostics(uri: str, content: str, version: Optional[int] = None):
     """Publish diagnostics for a document snapshot and its version."""
+    if version is not None:
+        previous_version = server.diagnostic_versions.get(uri)
+        if previous_version is not None and version < previous_version:
+            logger.debug(
+                "Skipping stale diagnostics for %s: version %s < %s",
+                uri,
+                version,
+                previous_version,
+            )
+            return
+        server.diagnostic_versions[uri] = version
     diagnostics = server.diagnostics_provider.get_diagnostics(content, uri, server.documents)
     server.set_document_diagnostics(uri, diagnostics)
     server.publish_diagnostics(uri, diagnostics, version=version)
@@ -653,14 +682,7 @@ def _publish_diagnostics(uri: str, content: str, version: Optional[int] = None):
 
 def _get_file_type(uri: str) -> str:
     """Determine file type from URI."""
-    filename = uri.split("/")[-1].upper()
-    if "INCAR" in filename:
-        return "INCAR"
-    if "POSCAR" in filename or "CONTCAR" in filename:
-        return "POSCAR"
-    if "KPOINTS" in filename:
-        return "KPOINTS"
-    return "UNKNOWN"
+    return document_kind(uri).value
 
 
 def main():

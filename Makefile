@@ -1,7 +1,10 @@
-.PHONY: install format lint typecheck test check cleanup-merged
+.PHONY: install format lint typecheck test schema-audit check cleanup-merged
 
 install:
 	bash scripts/install.sh
+
+schema-audit:
+	uv run --extra dev vasp-lsp-schema-audit
 
 format:
 	bash scripts/format.sh
@@ -15,7 +18,7 @@ typecheck:
 test:
 	bash scripts/test.sh
 
-check: lint typecheck test
+check: lint typecheck test schema-audit
 
 cleanup-merged:
 	bash scripts/cleanup_merged_worktrees.sh

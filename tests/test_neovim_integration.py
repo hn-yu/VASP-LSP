@@ -13,6 +13,16 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 NVIM_CONFIG_ROOT = REPO_ROOT / "editors" / "neovim"
 
 
+def test_bundled_config_registers_standard_vasp_filenames() -> None:
+    """The native config should not require a second init.lua mapping."""
+    source = (NVIM_CONFIG_ROOT / "lsp" / "vasp_lsp.lua").read_text(encoding="utf-8")
+
+    assert "vim.filetype.add" in source
+    assert "INCAR = \"incar\"" in source
+    assert "POTCAR = \"potcar\"" in source
+    assert "slurm%-.*%.out" in source
+
+
 @pytest.mark.integration
 def test_bundled_neovim_config_attaches_to_incar(tmp_path: Path) -> None:
     """A fresh Neovim 0.11 config should attach without nvim-lspconfig setup."""

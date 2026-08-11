@@ -1,5 +1,7 @@
 """Tests for POSCAR and KPOINTS diagnostics coverage."""
 
+from lsprotocol.types import DiagnosticSeverity
+
 from vasp_lsp.features.diagnostics import DiagnosticsProvider
 
 
@@ -213,8 +215,11 @@ Gamma
 """
         diagnostics = provider.get_diagnostics(content, "file:///test/KPOINTS")
 
-        # Should have warning about sparse grid
-        assert any("very sparse" in d.message.lower() for d in diagnostics)
+        # A 1x1x1 mesh is valid for isolated molecules and large-vacuum cells;
+        # without convergence evidence it should remain an informational hint.
+        sparse = [d for d in diagnostics if "very sparse" in d.message.lower()]
+        assert len(sparse) == 1
+        assert sparse[0].severity == DiagnosticSeverity.Information
 
     def test_kpoints_weights_not_sum_to_one(self):
         """Test diagnostics for KPOINTS with weights not summing to 1."""

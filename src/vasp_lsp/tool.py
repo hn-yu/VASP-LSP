@@ -10,6 +10,7 @@ from typing import Any
 from . import dsl_description
 from .agent_operations import operation_path, with_capabilities
 from .rich_diagnostics import agent_check_payload, diagnostic_to_dict
+from .workspace import DocumentKind, document_kind
 
 SOFTWARE = "vasp"
 PLAN24_SCHEMA_VERSION = "vasp-lsp.plan24.v1"
@@ -32,19 +33,26 @@ _WORKSPACE_DOCUMENT_NAMES = frozenset(
 
 
 def _file_type(path: Path) -> str:
-    name = path.name.upper()
-    if name in {"INCAR", "POSCAR", "KPOINTS", "POTCAR", "CONTCAR"}:
-        return name
+    kind = document_kind(path)
+    if kind is not DocumentKind.UNKNOWN:
+        return str(kind.value)
     if "." in path.name:
         return path.suffix.lstrip(".").lower()
-    return name.lower()
+    return path.name.lower()
 
 
 def _collect_diagnostics(path: Path) -> list[Any]:
     from .features.diagnostics import DiagnosticsProvider
 
     text = path.read_text(encoding="utf-8")
-    return list(DiagnosticsProvider().get_diagnostics(text, path.resolve().as_uri(), {}))
+    workspace_documents = _workspace_documents(path.parent)
+    return list(
+        DiagnosticsProvider().get_diagnostics(
+            text,
+            path.resolve().as_uri(),
+            workspace_documents,
+        )
+    )
 
 
 def check_path(path: Path) -> dict[str, Any]:
@@ -172,7 +180,7 @@ def _workspace_documents(directory: Path) -> dict[str, str]:
         return {}
     documents: dict[str, str] = {}
     for path in sorted(directory.iterdir()):
-        if _is_workspace_document(path):
+        if _is_neighbor_document(path):
             try:
                 documents[path.resolve().as_uri()] = _read_text(path)
             except OSError:
@@ -181,6 +189,18 @@ def _workspace_documents(directory: Path) -> dict[str, str]:
                 # not prevent checking the requested INCAR.
                 continue
     return documents
+
+
+def _is_neighbor_document(path: Path) -> bool:
+    """Return whether *path* is a small input file needed as neighbor context."""
+    if not path.is_file() or path.name.startswith("."):
+        return False
+    return document_kind(path) in {
+        DocumentKind.INCAR,
+        DocumentKind.POSCAR,
+        DocumentKind.KPOINTS,
+        DocumentKind.POTCAR,
+    }
 
 
 def _is_workspace_document(path: Path) -> bool:
@@ -195,6 +215,14 @@ def _is_workspace_document(path: Path) -> bool:
     if not path.is_file() or path.name.startswith("."):
         return False
     name = path.name.upper()
+    kind = document_kind(path)
+    if kind in {
+        DocumentKind.INCAR,
+        DocumentKind.POSCAR,
+        DocumentKind.KPOINTS,
+        DocumentKind.POTCAR,
+    }:
+        return True
     if name in _WORKSPACE_DOCUMENT_NAMES:
         return True
     return name.startswith("SLURM-") and name.endswith((".OUT", ".ERR"))
@@ -336,6 +364,18 @@ def schema_main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def schema_audit_main(argv: list[str] | None = None) -> int:
+    """Console entry for the offline official-Wiki schema audit."""
+    parser = argparse.ArgumentParser(prog="vasp-lsp-schema-audit")
+    parser.add_argument("--format", choices=["json"], default="json")
+    parser.parse_args(argv)
+    from .schema_audit import audit_schema
+
+    payload = with_capabilities(audit_schema(), "schema-audit")
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0 if payload["ok"] else 1
+
+
 def examples_main(argv: list[str] | None = None) -> int:
     """Console entry for ``vasp-lsp-examples``: print minimal example JSON (#31)."""
     parser = argparse.ArgumentParser(prog="vasp-lsp-examples")
@@ -367,6 +407,7 @@ def main(argv: list[str] | None = None) -> int:
         "rules",
         "describe",
         "schema",
+        "schema-audit",
         "section",
         "examples",
         "next-tokens",
@@ -385,6 +426,8 @@ def main(argv: list[str] | None = None) -> int:
             pass
         elif operation == "schema":
             sub.add_argument("keyword", help="INCAR keyword to look up.")
+        elif operation == "schema-audit":
+            pass
         elif operation == "section":
             sub.add_argument("section", help="VASP section/file type to look up.")
         elif operation == "examples":
@@ -437,6 +480,12 @@ def main(argv: list[str] | None = None) -> int:
         payload = with_capabilities(dsl_description.describe_keyword(args.keyword), "schema")
         print(json.dumps(payload, indent=2, sort_keys=True))
         return 0
+    if args.operation == "schema-audit":
+        from .schema_audit import audit_schema
+
+        payload = with_capabilities(audit_schema(), "schema-audit")
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0 if payload["ok"] else 1
     if args.operation == "section":
         payload = with_capabilities(dsl_description.describe_section(args.section), "section")
         print(json.dumps(payload, indent=2, sort_keys=True))

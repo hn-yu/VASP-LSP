@@ -3,6 +3,14 @@ set -euo pipefail
 
 PYTHON_BIN="${PYTHON:-python3}"
 
+run_python() {
+  if command -v uv >/dev/null 2>&1 && [ -f pyproject.toml ]; then
+    uv run --extra dev "$@"
+  else
+    "$PYTHON_BIN" "$@"
+  fi
+}
+
 ran=0
 
 has_npm_script() {
@@ -22,7 +30,7 @@ if [ -f Cargo.toml ]; then
 fi
 
 if ([ -d tests ] || [ -d test ] || [ -f pytest.ini ]) && ([ -f pyproject.toml ] || [ -f setup.py ] || [ -f pytest.ini ]); then
-  "$PYTHON_BIN" -m pytest
+  run_python -m pytest
   ran=1
 fi
 

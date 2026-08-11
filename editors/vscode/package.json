@@ -3,7 +3,14 @@
   "displayName": "VASP Language Support",
   "description": "Language Server Protocol support for VASP input files (INCAR, POSCAR, KPOINTS, POTCAR)",
   "version": "0.4.5",
-  "publisher": "newtontech",
+  "publisher": "hn-yu",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hn-yu/VASP-LSP.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hn-yu/VASP-LSP/issues"
+  },
   "license": "MIT",
   "engines": {
     "vscode": "^1.82.0"
@@ -26,7 +33,8 @@
     "onLanguage:vasp-in",
     "onLanguage:vasp-poscar",
     "onLanguage:vasp-kpoints",
-    "onLanguage:vasp-potcar"
+    "onLanguage:vasp-potcar",
+    "onLanguage:vasp-log"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -36,6 +44,7 @@
         "aliases": ["VASP INCAR", "INCAR"],
         "extensions": [".incar"],
         "filenames": ["INCAR", "INCAR.", "INCAR.vasp"],
+        "filenamePatterns": ["**/INCAR.*", "**/INCAR_*"],
         "configuration": "./language-configuration.json"
       },
       {
@@ -43,6 +52,7 @@
         "aliases": ["VASP POSCAR", "POSCAR"],
         "extensions": [".poscar",".contcar"],
         "filenames": ["POSCAR", "POSCAR.", "CONTCAR", "CONTCAR."],
+        "filenamePatterns": ["**/POSCAR.*", "**/POSCAR_*", "**/CONTCAR.*", "**/CONTCAR_*"],
         "configuration": "./language-configuration.json"
       },
       {
@@ -50,12 +60,20 @@
         "aliases": ["VASP KPOINTS", "KPOINTS"],
         "extensions": [".kpoints"],
         "filenames": ["KPOINTS", "KPOINTS.", "KPOINTS.vasp"],
+        "filenamePatterns": ["**/KPOINTS.*", "**/KPOINTS_*"],
         "configuration": "./language-configuration.json"
       },
       {
         "id": "vasp-potcar",
         "aliases": ["VASP POTCAR", "POTCAR"],
         "filenames": ["POTCAR", "POTCAR."],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "vasp-log",
+        "aliases": ["VASP runtime log", "VASP log"],
+        "filenames": ["OUTCAR", "OSZICAR", "STDOUT", "STDERR", "vasp.out", "vasp.err"],
+        "filenamePatterns": ["**/slurm-*.out", "**/slurm-*.err"],
         "configuration": "./language-configuration.json"
       }
     ],

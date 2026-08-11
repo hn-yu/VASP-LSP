@@ -6,6 +6,31 @@
 -- Then enable it once from init.lua:
 --   vim.lsp.enable("vasp_lsp")
 
+-- Register VASP filenames before the LSP is enabled.  This keeps the bundled
+-- config usable on a fresh Neovim installation without requiring a separate
+-- filetype.lua snippet in init.lua.
+if vim.filetype and vim.filetype.add then
+  vim.filetype.add({
+    filename = {
+      INCAR = "incar",
+      POSCAR = "poscar",
+      CONTCAR = "poscar",
+      KPOINTS = "kpoints",
+      POTCAR = "potcar",
+      OUTCAR = "outcar",
+      OSZICAR = "vasp_log",
+      STDOUT = "vasp_log",
+      STDERR = "vasp_log",
+      ["vasp.out"] = "vasp_log",
+      ["vasp.err"] = "vasp_log",
+    },
+    pattern = {
+      ["slurm%-.*%.out"] = "vasp_log",
+      ["slurm%-.*%.err"] = "vasp_log",
+    },
+  })
+end
+
 return {
   cmd = { "vasp-lsp", "--stdio" },
 

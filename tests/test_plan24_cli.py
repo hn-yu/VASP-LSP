@@ -51,6 +51,30 @@ def test_workspace_documents_ignore_large_calculation_artifacts(tmp_path, monkey
     assert chgcar.resolve().as_uri() not in documents
 
 
+def test_workspace_documents_do_not_load_runtime_logs(tmp_path, monkeypatch) -> None:
+    """Input-file context must not read multi-megabyte OUTCAR/slurm logs."""
+    incar = tmp_path / "INCAR"
+    outcar = tmp_path / "OUTCAR"
+    slurm = tmp_path / "slurm-123.out"
+    incar.write_text("ENCUT = 520\n", encoding="utf-8")
+    outcar.write_text("runtime output\n", encoding="utf-8")
+    slurm.write_text("scheduler output\n", encoding="utf-8")
+
+    original_read_text = tool._read_text
+
+    def read_text(path):
+        if path in {outcar, slurm}:
+            raise AssertionError(f"runtime log should not be loaded: {path.name}")
+        return original_read_text(path)
+
+    monkeypatch.setattr(tool, "_read_text", read_text)
+    documents = tool._workspace_documents(tmp_path)
+
+    assert incar.resolve().as_uri() in documents
+    assert outcar.resolve().as_uri() not in documents
+    assert slurm.resolve().as_uri() not in documents
+
+
 def test_directory_check_skips_vaspkit_metadata_file(tmp_path) -> None:
     (tmp_path / "INCAR").write_text("ENCUT = 520\n", encoding="utf-8")
     (tmp_path / "POTCAR.spec").write_text("Si\n", encoding="utf-8")

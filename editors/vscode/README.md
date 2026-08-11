@@ -1,6 +1,8 @@
 # VASP Language Support for VSCode
 
 VSCode extension for VASP (Vienna Ab initio Simulation Package) input files.
+This fork is published under the `hn-yu` publisher identity and tracks the
+repository at https://github.com/hn-yu/VASP-LSP.
 
 ## Features
 
@@ -21,7 +23,10 @@ official VASP Wiki reference.
 
 1. Install the VASP-LSP server:
 ```bash
-pip install vasp-lsp
+# This fork:
+uv tool install git+https://github.com/hn-yu/VASP-LSP.git
+# Or from a local clone:
+# uv tool install --force .
 ```
 
 2. Verify installation:
@@ -44,6 +49,12 @@ The extension automatically activates when you open VASP input files:
 - `POSCAR`, `CONTCAR` or `*.poscar`
 - `KPOINTS` or `*.kpoints`
 - `POTCAR`
+- `OUTCAR`, `OSZICAR`, `STDOUT`, `STDERR`, `vasp.out`, `vasp.err`, or Slurm
+  captures such as `slurm-123.out`
+
+Runtime logs use the same language-server diagnostics as the Neovim config;
+the bundled extension contributes the selector, so no manual VSCode mapping is
+required.
 
 ### Autocomplete
 
