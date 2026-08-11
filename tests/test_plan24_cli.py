@@ -1,6 +1,8 @@
 import json
 
 from vasp_lsp import tool
+from vasp_lsp.features.diagnostics import DiagnosticsProvider
+from vasp_lsp.parsers.potcar_parser import POTCARParser
 
 
 def test_workspace_documents_skip_unreadable_peer(tmp_path, monkeypatch) -> None:
@@ -21,6 +23,82 @@ def test_workspace_documents_skip_unreadable_peer(tmp_path, monkeypatch) -> None
 
     assert readable.resolve().as_uri() in documents
     assert unreadable.resolve().as_uri() not in documents
+
+
+def test_workspace_documents_ignore_large_calculation_artifacts(tmp_path, monkeypatch) -> None:
+    incar = tmp_path / "INCAR"
+    potcar = tmp_path / "POTCAR"
+    wavecar = tmp_path / "WAVECAR"
+    chgcar = tmp_path / "CHGCAR"
+    incar.write_text("ENCUT = 520\n", encoding="utf-8")
+    potcar.write_text("PAW_PBE Si 05Jan2001\n", encoding="utf-8")
+    wavecar.write_bytes(b"binary wavefunction payload")
+    chgcar.write_bytes(b"binary charge density payload")
+
+    original_read_text = tool._read_text
+
+    def read_text(path):
+        if path in {wavecar, chgcar}:
+            raise AssertionError(f"large artifact should not be read: {path.name}")
+        return original_read_text(path)
+
+    monkeypatch.setattr(tool, "_read_text", read_text)
+    documents = tool._workspace_documents(tmp_path)
+
+    assert incar.resolve().as_uri() in documents
+    assert potcar.resolve().as_uri() in documents
+    assert wavecar.resolve().as_uri() not in documents
+    assert chgcar.resolve().as_uri() not in documents
+
+
+def test_directory_check_skips_vaspkit_metadata_file(tmp_path) -> None:
+    (tmp_path / "INCAR").write_text("ENCUT = 520\n", encoding="utf-8")
+    (tmp_path / "POTCAR.spec").write_text("Si\n", encoding="utf-8")
+
+    payload = tool.check_target(tmp_path)
+
+    assert not any(
+        item["source_file"].endswith("POTCAR.spec") for item in payload["diagnostics"]
+    )
+
+
+def test_diagnostics_reuses_unchanged_potcar_parse(monkeypatch) -> None:
+    poscar = """Test
+1.0
+5 0 0
+0 5 0
+0 0 5
+Si
+1
+Direct
+0 0 0
+"""
+    potcar = """TITEL = PAW_PBE Si 05Jan2001
+ENMAX = 245.345; ENMIN = 143.678
+"""
+    workspace = {
+        "file:///calc/POSCAR": poscar,
+        "file:///calc/POTCAR": potcar,
+    }
+    provider = DiagnosticsProvider()
+    init_calls = 0
+    original_init = POTCARParser.__init__
+
+    def counted_init(self, content):
+        nonlocal init_calls
+        init_calls += 1
+        original_init(self, content)
+
+    monkeypatch.setattr(POTCARParser, "__init__", counted_init)
+
+    for _ in range(2):
+        provider.get_diagnostics(
+            "ENCUT = 520\n",
+            "file:///calc/INCAR",
+            workspace_documents=workspace,
+        )
+
+    assert init_calls == 1
 
 
 def test_vasp_lsp_check_directory_json_and_blocking_exit(tmp_path, capsys) -> None:

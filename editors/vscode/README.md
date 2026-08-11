@@ -11,6 +11,10 @@ VSCode extension for VASP (Vienna Ab initio Simulation Package) input files.
 - ✨ **Document Formatting** - Format INCAR, POSCAR, and KPOINTS files
 - 🔧 **Quick Fixes** - Automatic fixes for common issues
 
+POTCAR files are also recognized by the language client. Hovering over
+`ENMAX` or `ENMIN` shows the read-only pseudopotential metadata and its
+official VASP Wiki reference.
+
 ## Installation
 
 ### Prerequisites
@@ -39,6 +43,7 @@ The extension automatically activates when you open VASP input files:
 - `INCAR` or `*.incar`
 - `POSCAR`, `CONTCAR` or `*.poscar`
 - `KPOINTS` or `*.kpoints`
+- `POTCAR`
 
 ### Autocomplete
 

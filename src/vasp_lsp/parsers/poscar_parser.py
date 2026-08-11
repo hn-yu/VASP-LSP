@@ -24,6 +24,7 @@ class POSCARData:
     atom_counts_line: int = 6
     coord_type_line: int = 7
     has_selective_dynamics: bool = False
+    has_explicit_atom_types: bool = True
 
     def scaled_lattice_vectors(self) -> List[List[float]]:
         """Return lattice vectors after applying the POSCAR scale factor."""
@@ -76,6 +77,7 @@ class POSCARParser:
         self.allow_post_coordinate_data = allow_post_coordinate_data
         self.data: Optional[POSCARData] = None
         self.errors: List[Dict[str, Any]] = []
+        self._parsed = False
 
     def parse(self) -> Optional[POSCARData]:
         """Parse the POSCAR file content.
@@ -83,6 +85,9 @@ class POSCARParser:
         Returns:
             POSCARData object if successful, None otherwise.
         """
+        if self._parsed:
+            return self.data
+        self._parsed = True
         self.errors = []
 
         try:
@@ -142,7 +147,8 @@ class POSCARParser:
                 )
                 return None
 
-            if atom_types_line[0].isalpha():
+            has_explicit_atom_types = atom_types_line[0].isalpha()
+            if has_explicit_atom_types:
                 atom_types = atom_types_line.split()
                 line_idx += 1
             else:
@@ -305,6 +311,7 @@ class POSCARParser:
                 atom_counts_line=atom_counts_line_idx,
                 coord_type_line=coord_type_line_idx,
                 has_selective_dynamics=has_selective_dynamics,
+                has_explicit_atom_types=has_explicit_atom_types,
             )
 
             return self.data

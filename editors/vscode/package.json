@@ -1,7 +1,7 @@
 {
   "name": "vasp-lsp",
   "displayName": "VASP Language Support",
-  "description": "Language Server Protocol support for VASP input files (INCAR, POSCAR, KPOINTS)",
+  "description": "Language Server Protocol support for VASP input files (INCAR, POSCAR, KPOINTS, POTCAR)",
   "version": "0.4.5",
   "publisher": "newtontech",
   "license": "MIT",
@@ -25,7 +25,8 @@
   "activationEvents": [
     "onLanguage:vasp-in",
     "onLanguage:vasp-poscar",
-    "onLanguage:vasp-kpoints"
+    "onLanguage:vasp-kpoints",
+    "onLanguage:vasp-potcar"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -49,6 +50,12 @@
         "aliases": ["VASP KPOINTS", "KPOINTS"],
         "extensions": [".kpoints"],
         "filenames": ["KPOINTS", "KPOINTS.", "KPOINTS.vasp"],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "vasp-potcar",
+        "aliases": ["VASP POTCAR", "POTCAR"],
+        "filenames": ["POTCAR", "POTCAR."],
         "configuration": "./language-configuration.json"
       }
     ],

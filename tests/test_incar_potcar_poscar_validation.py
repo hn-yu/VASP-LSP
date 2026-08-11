@@ -8,6 +8,7 @@ Covers issue #1 safe subset:
 """
 
 from vasp_lsp.features.diagnostics import DiagnosticsProvider
+from vasp_lsp.parsers.poscar_parser import POSCARParser
 from vasp_lsp.parsers.potcar_parser import POTCARParser
 
 # ---------------------------------------------------------------------------
@@ -70,6 +71,49 @@ Direct
 0.0 0.0 0.0
 0.5 0.5 0.5
 0.1 0.1 0.1
+"""
+
+POSCAR_VASP4_SI_O = """Test System
+1.0
+5.0 0.0 0.0
+0.0 5.0 0.0
+0.0 0.0 5.0
+1 1
+Direct
+0.0 0.0 0.0
+0.5 0.5 0.5
+"""
+
+POSCAR_VASP6_HASHED_C_H = """Test System
+1.0
+5.0 0.0 0.0
+0.0 5.0 0.0
+0.0 0.0 5.0
+C_h/1e4d9ea6ed H_h/143491dc
+1 1
+Direct
+0.0 0.0 0.0
+0.5 0.5 0.5
+"""
+
+POSCAR_SINGLE_H = """Test System
+1.0
+5.0 0.0 0.0
+0.0 5.0 0.0
+0.0 0.0 5.0
+H
+1
+Direct
+0.0 0.0 0.0
+"""
+
+POTCAR_UNKNOWN_TITEL = """TITEL  = PAW_PBE 08Apr2002
+VRHFIN = H: s1
+ENMAX = 250.000; ENMIN = 200.000 eV
+"""
+
+POTCAR_UNIDENTIFIED_TITEL = """TITEL  = PAW_PBE 08Apr2002
+ENMAX = 250.000; ENMIN = 200.000 eV
 """
 
 
@@ -318,6 +362,21 @@ class TestPOTCARDatasetParsing:
         msgs = [d.message.lower() for d in diags]
         assert not any("mixes functionals" in m for m in msgs)
 
+    def test_vrhfin_recovers_species_when_titel_has_no_element_token(self) -> None:
+        data = POTCARParser(POTCAR_UNKNOWN_TITEL).parse()
+        assert data is not None
+        assert [entry.element for entry in data.entries] == ["H"]
+
+    def test_hydrogen_like_valence_suffixes_keep_hydrogen_species(self) -> None:
+        content = """TITEL = PAW_PBE H1.25 07Sep2000
+ENMAX = 250.000; ENMIN = 200.000 eV
+TITEL = PAW_PBE H.75 07Sep2000
+ENMAX = 250.000; ENMIN = 200.000 eV
+"""
+        data = POTCARParser(content).parse()
+        assert data is not None
+        assert [entry.element for entry in data.entries] == ["H", "H"]
+
 
 # ---------------------------------------------------------------------------
 # POSCAR/POTCAR species order
@@ -353,6 +412,101 @@ Direct
         diags = _get_incar_diagnostics(incar, poscar=POSCAR_SIMPLE, potcar=POTCAR_PBE_SI_O)
         msgs = [d.message.lower() for d in diags]
         assert not any("species order" in m for m in msgs)
+
+    def test_potcar_species_count_must_match_exactly(self) -> None:
+        """An extra POTCAR dataset must not be hidden by prefix comparison."""
+        extra_potcar = POTCAR_PBE_SI_O + POTCAR_PBE_SI
+        diags = _get_incar_diagnostics(
+            "SYSTEM = test\n", poscar=POSCAR_SIMPLE, potcar=extra_potcar
+        )
+        msgs = [d.message.lower() for d in diags]
+        assert any("species groups" in message and "datasets" in message for message in msgs)
+
+    def test_vasp4_poscar_without_species_names_does_not_fake_order_mismatch(self) -> None:
+        """A VASP4 POSCAR gets species from POTCAR, not Type1/Type2 names."""
+        parsed = POSCARParser(POSCAR_VASP4_SI_O).parse()
+        assert parsed is not None
+        assert parsed.has_explicit_atom_types is False
+        diags = _get_incar_diagnostics(
+            "SYSTEM = test\n", poscar=POSCAR_VASP4_SI_O, potcar=POTCAR_PBE_SI_O
+        )
+        msgs = [d.message.lower() for d in diags]
+        assert not any("species order" in message for message in msgs)
+
+    def test_unidentified_potcar_species_is_not_reported_as_order_mismatch(self) -> None:
+        """Parser uncertainty must be reported separately from a real mismatch."""
+        diags = _get_incar_diagnostics(
+            "SYSTEM = test\n",
+            poscar=POSCAR_SINGLE_H,
+            potcar=POTCAR_UNIDENTIFIED_TITEL,
+        )
+        msgs = [d.message.lower() for d in diags]
+        assert not any("species order" in message for message in msgs)
+        assert any("cannot verify" in message for message in msgs)
+
+    def test_vasp6_hashed_poscar_names_match_potcar_elements(self) -> None:
+        """VASP6 CONTCAR hash names should compare using their base species."""
+        potcar = POTCAR_PBE_SI.replace("Si", "C")
+        potcar += POTCAR_PBE_SI.replace("Si", "H")
+        diags = _get_incar_diagnostics(
+            "SYSTEM = test\n",
+            poscar=POSCAR_VASP6_HASHED_C_H,
+            potcar=potcar,
+        )
+        msgs = [d.message.lower() for d in diags]
+        assert not any("species order" in message for message in msgs)
+        assert not any("invalid element symbols" in message for message in msgs)
+
+    def test_hydrogen_like_poscar_labels_match_hydrogen_potcars(self) -> None:
+        """Fractional-valence labels still compare as the base element H."""
+        poscar = POSCAR_SINGLE_H.replace(
+            "H\n1\nDirect\n0.0 0.0 0.0",
+            "H1.25 H.75 H\n1 1 1\nDirect\n"
+            "0.0 0.0 0.0\n0.2 0.2 0.2\n0.4 0.4 0.4",
+        )
+        potcar = POTCAR_PBE_SI.replace("Si", "H1.25")
+        potcar += POTCAR_PBE_SI.replace("Si", "H.75")
+        potcar += POTCAR_PBE_SI.replace("Si", "H")
+        diags = _get_incar_diagnostics("SYSTEM = test\n", poscar=poscar, potcar=potcar)
+        assert not any("species order" in d.message.lower() for d in diags)
+
+    def test_failed_potcar_parse_is_not_recast_as_species_count(self) -> None:
+        """A failed POTCAR parse gets its own error, not a fake zero-count mismatch."""
+        diags = _get_incar_diagnostics(
+            "SYSTEM = test\n", poscar=POSCAR_SIMPLE, potcar="not a POTCAR dataset\n"
+        )
+        messages = [d.message.lower() for d in diags]
+        assert any("potcar parse error" in message for message in messages)
+        assert not any("species groups" in message for message in messages)
+
+    def test_opening_poscar_runs_species_match(self) -> None:
+        """POSCAR diagnostics must check its neighbouring POTCAR directly."""
+        provider = DiagnosticsProvider()
+        diags = provider.get_diagnostics(
+            POSCAR_SIMPLE.replace("Si O", "O Si"),
+            "file:///test/POSCAR",
+            workspace_documents={"file:///test/POTCAR": POTCAR_PBE_SI_O},
+        )
+        assert any("species order" in diagnostic.message.lower() for diagnostic in diags)
+
+    def test_opening_potcar_runs_species_match(self) -> None:
+        """POTCAR diagnostics must check its neighbouring POSCAR directly."""
+        provider = DiagnosticsProvider()
+        diags = provider.get_diagnostics(
+            POTCAR_PBE_SI_O,
+            "file:///test/POTCAR",
+            workspace_documents={"file:///test/POSCAR": POSCAR_SIMPLE.replace("Si O", "O Si")},
+        )
+        assert any("species order" in diagnostic.message.lower() for diagnostic in diags)
+
+    def test_opening_malformed_potcar_reports_parser_error(self) -> None:
+        """A malformed POTCAR must not silently produce no diagnostics."""
+        provider = DiagnosticsProvider()
+        diags = provider.get_diagnostics(
+            "not a POTCAR dataset\n",
+            "file:///test/POTCAR",
+        )
+        assert any("potcar parse error" in diagnostic.message.lower() for diagnostic in diags)
 
 
 # ---------------------------------------------------------------------------
