@@ -11,9 +11,24 @@ import importlib
 import inspect
 import re
 from collections.abc import Iterable
+from enum import Enum
 from pathlib import Path
 from typing import Any, Callable
 
+from lsprotocol.types import (
+    CompletionParams,
+    Diagnostic,
+    DiagnosticSeverity,
+    HoverParams,
+    Position,
+    Range,
+    TextDocumentIdentifier,
+)
+
+from .features.completion import CompletionProvider
+from .features.hover import HoverProvider
+from .features.navigation import DocumentSymbolsProvider
+from .features.quickfixes import QuickFixesProvider
 from .rich_diagnostics import agent_check_payload
 
 OPERATIONS = (
@@ -85,13 +100,16 @@ def operation_path(
         path=str(path),
         file_type=file_type,
     )
+    payload["file_type"] = file_type
     position = {"line": max(line, 0), "character": max(character, 0)}
     payload["position"] = position
 
     if operation == "context":
         context = _context_for(text, position)
         context.update({"path": str(path), "file_type": file_type})
-        context["nearby_symbols"] = _nearby_symbols(_symbols_for(path, text), line)
+        symbols, symbols_source = _symbols_dispatch(path, text)
+        context["nearby_symbols"] = _nearby_symbols(symbols, line)
+        context["symbols_source"] = symbols_source
         context["diagnostics_at_position"] = _diagnostics_at_position(
             payload["diagnostics"], line, character
         )
@@ -99,10 +117,11 @@ def operation_path(
         return with_capabilities(payload, operation)
 
     if operation == "complete":
-        items = _completion_items(path, text, file_type)
-        if not items:
-            items = _generic_completion_items(text, payload["diagnostics"])
+        items, result_source = _completion_dispatch(
+            path, text, file_type, line=line, character=character, diagnostics=payload["diagnostics"]
+        )
         payload["items"] = items
+        _mark_result_source(payload, result_source)
         status = "available" if items else "unavailable"
         reason = (
             None if items else "No completion provider or extractable symbols for this document."
@@ -111,25 +130,40 @@ def operation_path(
 
     if operation == "hover":
         context = _context_for(text, position)
-        contents = _hover_contents(path, text, context.get("token", ""), file_type)
-        if contents is None:
-            contents = _diagnostic_hover(payload["diagnostics"], line, character)
+        contents, result_source = _hover_dispatch(
+            path,
+            text,
+            context.get("token", ""),
+            file_type,
+            line=line,
+            character=character,
+            diagnostics=payload["diagnostics"],
+        )
         payload["context"] = context
         payload["contents"] = contents
+        _mark_result_source(payload, result_source)
         status = "available" if contents else "unavailable"
         reason = None if contents else "No hover documentation found for this position."
         return with_capabilities(payload, operation, status=status, reason=reason)
 
     if operation == "symbols":
-        items = _symbols_for(path, text)
+        items, result_source = _symbols_dispatch(path, text)
         payload["items"] = items
+        _mark_result_source(payload, result_source)
         status = "available" if items else "unavailable"
         reason = None if items else "No document symbols could be extracted."
         return with_capabilities(payload, operation, status=status, reason=reason)
 
     if operation == "fix":
-        actions = _fix_actions(payload["diagnostics"], line=line, character=character)
+        actions, result_source = _fix_dispatch(
+            path,
+            text,
+            payload["diagnostics"],
+            line=line,
+            character=character,
+        )
         payload["actions"] = actions
+        _mark_result_source(payload, result_source)
         status = "available" if actions else "unavailable"
         reason = (
             None if actions else "No safe quick-fix hints are available for current diagnostics."
@@ -221,7 +255,81 @@ def _diagnostics_at_position(
     return selected
 
 
-def _completion_items(path: Path, text: str, file_type: str) -> list[dict[str, Any]]:
+def _mark_result_source(payload: dict[str, Any], source: str) -> None:
+    """Expose whether an operation used a real provider or a fallback."""
+    payload["result_source"] = source
+    payload["fallback"] = source == "fallback"
+
+
+def _legacy_adapter_overridden() -> bool:
+    """Return whether a caller replaced the old dynamic adapter hook.
+
+    Older integrations and the historical test seam monkeypatch
+    ``_import_optional``.  Treating that as an explicit compatibility mode
+    keeps those integrations stable while the normal path always starts with
+    the first-class providers imported above.
+    """
+    return _import_optional is not _DEFAULT_IMPORT_OPTIONAL
+
+
+def _completion_dispatch(
+    path: Path,
+    text: str,
+    file_type: str,
+    *,
+    line: int,
+    character: int,
+    diagnostics: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], str]:
+    if _legacy_adapter_overridden():
+        legacy = _legacy_completion_items(path, text, file_type)
+        if legacy:
+            return legacy, "legacy-provider"
+        fallback = _generic_completion_items(text, diagnostics)
+        return fallback, "fallback"
+
+    provider = _real_completion_items(path, text, line=line, character=character)
+    if provider:
+        # Keep diagnostic-derived labels available to older agent clients, but
+        # leave the first-class provider as the primary result source.
+        if diagnostics:
+            provider = _dedupe_items(
+                provider + _generic_completion_items(text, diagnostics), "label"
+            )[:200]
+        return provider, "provider"
+
+    legacy = _legacy_completion_items(path, text, file_type)
+    if legacy:
+        return legacy, "legacy-provider"
+
+    fallback = _generic_completion_items(text, diagnostics)
+    if fallback:
+        return fallback, "fallback"
+    return [], "provider" if provider is not None else "fallback"
+
+
+def _real_completion_items(
+    path: Path, text: str, *, line: int, character: int
+) -> list[dict[str, Any]] | None:
+    uri = path.resolve().as_uri()
+    params = CompletionParams(
+        text_document=TextDocumentIdentifier(uri=uri),
+        position=Position(line=max(line, 0), character=max(character, 0)),
+    )
+    try:
+        result = CompletionProvider().get_completions(params, text, uri)
+    except Exception:
+        return None
+    raw_items = getattr(result, "items", None)
+    if raw_items is None:
+        return None
+    return _dedupe_items(
+        [_normalize_completion_item(item, source="provider") for item in raw_items],
+        "label",
+    )[:200]
+
+
+def _legacy_completion_items(path: Path, text: str, file_type: str) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     package = __name__.rsplit(".", 1)[0]
     module_names = (
@@ -247,11 +355,69 @@ def _completion_items(path: Path, text: str, file_type: str) -> list[dict[str, A
                 continue
             value = _call_provider(fn, path, text, file_type)
             if isinstance(value, list):
-                items.extend(_normalize_completion_item(item) for item in value)
+                items.extend(
+                    _normalize_completion_item(item, source="legacy-provider") for item in value
+                )
     return _dedupe_items(items, "label")[:200]
 
 
-def _hover_contents(path: Path, text: str, token: str, file_type: str) -> Any:
+def _hover_dispatch(
+    path: Path,
+    text: str,
+    token: str,
+    file_type: str,
+    *,
+    line: int,
+    character: int,
+    diagnostics: list[dict[str, Any]],
+) -> tuple[Any, str]:
+    if not _legacy_adapter_overridden():
+        provider = _real_hover_contents(path, text, line=line, character=character)
+        if provider is not None:
+            diagnostic_context = _diagnostic_hover(diagnostics, line, character)
+            if diagnostic_context:
+                return f"{_hover_text(provider)}\n\n{diagnostic_context}", "provider"
+            return provider, "provider"
+
+    legacy = _legacy_hover_contents(path, text, token, file_type)
+    if legacy is not None:
+        return legacy, "legacy-provider"
+
+    fallback = _diagnostic_hover(diagnostics, line, character)
+    return fallback, "fallback"
+
+
+def _hover_text(value: Any) -> str:
+    if isinstance(value, dict) and "value" in value:
+        return str(value["value"])
+    return str(value)
+
+
+def _real_hover_contents(
+    path: Path, text: str, *, line: int, character: int
+) -> Any | None:
+    uri = path.resolve().as_uri()
+    params = HoverParams(
+        text_document=TextDocumentIdentifier(uri=uri),
+        position=Position(line=max(line, 0), character=max(character, 0)),
+    )
+    try:
+        result = HoverProvider().get_hover(params, text, uri)
+    except Exception:
+        return None
+    return _normalize_hover(result)
+
+
+def _normalize_hover(value: Any) -> Any | None:
+    if value is None:
+        return None
+    contents = value.get("contents") if isinstance(value, dict) else getattr(value, "contents", value)
+    if contents is None:
+        return None
+    return _serialize_lsp_value(contents)
+
+
+def _legacy_hover_contents(path: Path, text: str, token: str, file_type: str) -> Any:
     if not token:
         return None
     package = __name__.rsplit(".", 1)[0]
@@ -281,7 +447,32 @@ def _hover_contents(path: Path, text: str, token: str, file_type: str) -> Any:
     return None
 
 
-def _symbols_for(path: Path, text: str) -> list[dict[str, Any]]:
+def _symbols_dispatch(path: Path, text: str) -> tuple[list[dict[str, Any]], str]:
+    if not _legacy_adapter_overridden():
+        provider = _real_symbols(path, text)
+        if provider:
+            return provider, "provider"
+
+    legacy = _legacy_symbols(path, text)
+    if legacy:
+        return legacy, "legacy-provider"
+
+    fallback = [_normalize_symbol(item, source="fallback") for item in _generic_symbols(text)]
+    if fallback:
+        return fallback, "fallback"
+    return [], "provider"
+
+
+def _real_symbols(path: Path, text: str) -> list[dict[str, Any]] | None:
+    uri = path.resolve().as_uri()
+    try:
+        raw_symbols = DocumentSymbolsProvider().get_symbols(text, uri)
+    except Exception:
+        return None
+    return [_normalize_symbol(item, source="provider") for item in raw_symbols]
+
+
+def _legacy_symbols(path: Path, text: str) -> list[dict[str, Any]]:
     package = __name__.rsplit(".", 1)[0]
     module_names = (
         f"{package}.symbols",
@@ -299,8 +490,8 @@ def _symbols_for(path: Path, text: str) -> list[dict[str, Any]]:
                 continue
             value = _call_provider(fn, path, text)
             if isinstance(value, list):
-                return [_normalize_symbol(item) for item in value]
-    return _generic_symbols(text)
+                return [_normalize_symbol(item, source="legacy-provider") for item in value]
+    return []
 
 
 def _generic_completion_items(text: str, diagnostics: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -318,7 +509,7 @@ def _generic_completion_items(text: str, diagnostics: list[dict[str, Any]]) -> l
         if isinstance(manual_ref, str) and manual_ref.strip():
             labels.setdefault(manual_ref.strip(), "Manual reference")
     return [
-        {"label": label, "detail": detail, "kind": 1, "source": "agent-generic"}
+        {"label": label, "detail": detail, "kind": 1, "source": "fallback"}
         for label, detail in sorted(labels.items())
     ][:200]
 
@@ -380,6 +571,124 @@ def _diagnostic_hover(diagnostics: list[dict[str, Any]], line: int, character: i
     return "\n".join(parts)
 
 
+def _fix_dispatch(
+    path: Path,
+    text: str,
+    diagnostics: list[dict[str, Any]],
+    *,
+    line: int,
+    character: int,
+) -> tuple[list[dict[str, Any]], str]:
+    if not _legacy_adapter_overridden():
+        provider = _real_fix_actions(path, text, diagnostics, line=line, character=character)
+        if provider:
+            return provider, "provider"
+
+    fallback = _fix_actions(diagnostics, line=line, character=character)
+    return fallback, "fallback"
+
+
+def _real_fix_actions(
+    path: Path,
+    text: str,
+    diagnostics: list[dict[str, Any]],
+    *,
+    line: int,
+    character: int,
+) -> list[dict[str, Any]] | None:
+    uri = path.resolve().as_uri()
+    lsp_diagnostics = [_diagnostic_to_lsp(item) for item in diagnostics]
+    requested_range = Range(
+        start=Position(line=max(line, 0), character=max(character, 0)),
+        end=Position(line=max(line, 0), character=max(character, 0) + 1),
+    )
+    try:
+        actions = QuickFixesProvider().get_code_actions(
+            text,
+            uri,
+            lsp_diagnostics,
+            requested_range,
+        )
+    except Exception:
+        return None
+    return [_normalize_code_action(action, diagnostics) for action in actions]
+
+
+def _diagnostic_to_lsp(item: dict[str, Any]) -> Diagnostic:
+    raw_range = item.get("range") or {}
+    start = raw_range.get("start") or {}
+    end = raw_range.get("end") or start
+    severity = {
+        "error": DiagnosticSeverity.Error,
+        "warning": DiagnosticSeverity.Warning,
+        "information": DiagnosticSeverity.Information,
+        "info": DiagnosticSeverity.Information,
+        "hint": DiagnosticSeverity.Hint,
+    }.get(str(item.get("severity", "information")).lower())
+    metadata = {
+        key: item[key]
+        for key in (
+            "confidence",
+            "category",
+            "manual_ref",
+            "fix_hints",
+            "blocking",
+            "suggested_actions",
+        )
+        if key in item
+    }
+    return Diagnostic(
+        range=Range(
+            start=Position(
+                line=int(start.get("line", 0) or 0),
+                character=int(start.get("character", 0) or 0),
+            ),
+            end=Position(
+                line=int(end.get("line", 0) or 0),
+                character=int(end.get("character", 0) or 0),
+            ),
+        ),
+        message=str(item.get("message", "")),
+        severity=severity,
+        code=item.get("code"),
+        source=item.get("source"),
+        data=metadata,
+    )
+
+
+def _normalize_code_action(
+    action: Any, diagnostics: list[dict[str, Any]]
+) -> dict[str, Any]:
+    title = str(_get_value(action, "title", "Quick fix"))
+    kind = _enum_value(_get_value(action, "kind", "quickfix"))
+    action_diagnostics = _get_value(action, "diagnostics", None) or []
+    first_diagnostic = action_diagnostics[0] if action_diagnostics else None
+    diagnostic_code = _get_value(first_diagnostic, "code", None)
+    diagnostic_range = _range_to_dict(_get_value(first_diagnostic, "range", None))
+    matching = next(
+        (item for item in diagnostics if item.get("code") == diagnostic_code),
+        {},
+    )
+    data = _serialize_lsp_value(_get_value(action, "data", None))
+    if data is None:
+        data = {}
+    if not isinstance(data, dict):
+        data = {"provider_data": data}
+    data.setdefault("source", "provider")
+    return {
+        "title": title,
+        "kind": kind,
+        "diagnostic_code": diagnostic_code or matching.get("code"),
+        "diagnostic_range": diagnostic_range or matching.get("range"),
+        "confidence": matching.get("confidence", 1.0),
+        "blocking": bool(matching.get("blocking", False)),
+        "safe_to_auto_apply": False,
+        "edit": _serialize_lsp_value(_get_value(action, "edit", None)),
+        "data": data,
+        "source": "provider",
+    }
+
+
 def _fix_actions(
     diagnostics: list[dict[str, Any]], *, line: int, character: int
 ) -> list[dict[str, Any]]:
@@ -401,6 +710,7 @@ def _fix_actions(
                     "safe_to_auto_apply": False,
                     "edit": None,
                     "data": {"hint_index": index, "source": diagnostic.get("source")},
+                    "source": "fallback",
                 }
             )
     return actions
@@ -411,6 +721,9 @@ def _import_optional(module_name: str) -> Any | None:
         return importlib.import_module(module_name)
     except Exception:
         return None
+
+
+_DEFAULT_IMPORT_OPTIONAL = _import_optional
 
 
 def _call_provider(fn: Callable[..., Any], *values: Any) -> Any:
@@ -438,31 +751,117 @@ def _call_provider(fn: Callable[..., Any], *values: Any) -> Any:
     return None
 
 
-def _normalize_completion_item(item: Any) -> dict[str, Any]:
+def _get_value(item: Any, name: str, default: Any = None) -> Any:
+    if item is None:
+        return default
+    if isinstance(item, dict):
+        return item.get(name, default)
+    return getattr(item, name, default)
+
+
+def _enum_value(value: Any) -> Any:
+    return value.value if isinstance(value, Enum) else value
+
+
+def _position_to_dict(value: Any) -> dict[str, int] | None:
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return {
+            "line": int(value.get("line", 0) or 0),
+            "character": int(value.get("character", 0) or 0),
+        }
+    return {
+        "line": int(getattr(value, "line", 0) or 0),
+        "character": int(getattr(value, "character", 0) or 0),
+    }
+
+
+def _range_to_dict(value: Any) -> dict[str, dict[str, int]] | None:
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        start = _position_to_dict(value.get("start"))
+        end = _position_to_dict(value.get("end"))
+    else:
+        start = _position_to_dict(getattr(value, "start", None))
+        end = _position_to_dict(getattr(value, "end", None))
+    if start is None or end is None:
+        return None
+    return {"start": start, "end": end}
+
+
+def _serialize_lsp_value(value: Any) -> Any:
+    """Serialize lsprotocol objects without relying on their private layout."""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, list):
+        return [_serialize_lsp_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_serialize_lsp_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _serialize_lsp_value(item) for key, item in value.items()}
+    if hasattr(value, "start") and hasattr(value, "end"):
+        return _range_to_dict(value)
+    slots = getattr(type(value), "__slots__", ())
+    if slots:
+        result: dict[str, Any] = {}
+        for name in slots:
+            if name == "__weakref__":
+                continue
+            member = getattr(value, name, None)
+            if member is None:
+                continue
+            json_name = re.sub(r"_([a-z])", lambda match: match.group(1).upper(), name)
+            result[json_name] = _serialize_lsp_value(member)
+        return result
+    return str(value)
+
+
+def _normalize_completion_item(item: Any, *, source: str = "provider") -> dict[str, Any]:
     if isinstance(item, dict):
         label = str(item.get("label") or item.get("name") or item.get("insertText") or "")
         detail = item.get("detail") or item.get("documentation") or item.get("description")
-        kind = item.get("kind", 1)
+        kind = _enum_value(item.get("kind", 1))
     else:
         label = str(getattr(item, "label", item))
         detail = getattr(item, "detail", None)
-        kind = getattr(item, "kind", 1)
-    return {"label": label, "detail": detail, "kind": kind, "source": "provider"}
+        kind = _enum_value(getattr(item, "kind", 1))
+    return {"label": label, "detail": _serialize_lsp_value(detail), "kind": kind, "source": source}
 
 
-def _normalize_symbol(item: Any) -> dict[str, Any]:
+def _normalize_symbol(item: Any, *, source: str = "provider") -> dict[str, Any]:
     if not isinstance(item, dict):
-        data = {"name": str(getattr(item, "name", item)), "kind": getattr(item, "kind", "symbol")}
+        data = {
+            "name": str(getattr(item, "name", item)),
+            "kind": _enum_value(getattr(item, "kind", "symbol")),
+            "range": _range_to_dict(getattr(item, "range", None)),
+            "selectionRange": _range_to_dict(getattr(item, "selection_range", None)),
+            "detail": getattr(item, "detail", None),
+        }
+        data = {key: value for key, value in data.items() if value is not None}
     else:
         data = dict(item)
+        data["kind"] = _enum_value(data.get("kind", "symbol"))
     name = str(data.get("name") or data.get("label") or "symbol")
     if "range" in data and "selectionRange" in data:
+        data["source"] = source
+        return data
+    if "selection_range" in data:
+        data["selectionRange"] = _range_to_dict(data.pop("selection_range"))
+    if "range" in data:
+        data["range"] = _range_to_dict(data["range"])
+    if "range" in data and "selectionRange" in data:
+        data["source"] = source
         return data
     line = int(data.get("line", 1) or 1) - 1
     column = int(data.get("column", 1) or 1) - 1
-    result = _symbol(name, str(data.get("kind", "symbol")), max(line, 0), max(column, 0))
+    result = _symbol(name, data.get("kind", "symbol"), max(line, 0), max(column, 0))
     if "detail" in data:
         result["detail"] = data["detail"]
+    result["source"] = source
     return result
 
 

@@ -4,10 +4,13 @@ A Language Server Protocol (LSP) implementation for VASP (Vienna Ab initio Simul
 
 ## Overview
 
-VASP-LSP provides intelligent code editing features for VASP calculation input files:
-- **INCAR** - Input parameters with autocomplete and validation
-- **POSCAR** - Structure file syntax highlighting
-- **KPOINTS** - K-point grid configuration
+VASP-LSP provides intelligent code editing and preflight diagnostics for VASP
+calculation files:
+- **INCAR** - Official-Wiki-backed keyword schema, autocomplete, hover, and validation
+- **POSCAR/CONTCAR** - Structure parsing, diagnostics, and formatting
+- **KPOINTS** - K-point parsing, diagnostics, and formatting
+- **POTCAR** - Read-only pseudopotential metadata and POSCAR/POTCAR checks
+- **VASP runtime logs** - Diagnostics for selected OUTCAR/stdout/stderr/Slurm logs
 
 ## Features
 
@@ -20,9 +23,9 @@ VASP-LSP provides intelligent code editing features for VASP calculation input f
 - 🔍 **Find References** - Find all occurrences of an INCAR tag
 - 📋 **Document Symbols** - Outline view for INCAR, POSCAR, and KPOINTS
 - 🔎 **Workspace Symbols** - Search symbols across open INCAR documents
-- ✏️ **Rename** - Safe workspace-wide rename of INCAR tags
+- ✏️ **Rename** - Previewed rename across open INCAR documents
 - 🔧 **Quick Fixes** - Automatic fixes for common issues
-- ✅ **Validate/Dry-Run** - Optional VASP binary validation with diagnostics
+- ✅ **Validate/Dry-Run** - Optional editor execute-command integration with a VASP binary
 
 ## Installation
 
@@ -73,6 +76,34 @@ filetypes and troubleshooting. The legacy
 require("lspconfig").vasp_lsp.setup{} form is not the recommended setup for
 Neovim 0.11+.
 
+### Feature scope and boundaries
+
+The native LSP server is the primary integration surface. Its core providers
+are diagnostics, completion, hover, formatting, document symbols, code actions,
+and document synchronization for the supported VASP file kinds. Cross-file
+diagnostics use a small calculation workspace: an unsaved open buffer takes
+precedence over the same file on disk, and recognized neighboring inputs are
+read from the calculation directory when needed.
+
+Some navigation features are intentionally narrower than their LSP names may
+suggest:
+
+| Feature | Actual scope | Maturity |
+| --- | --- | --- |
+| `textDocument/definition` | First matching INCAR assignment in the current document | Experimental navigation |
+| `textDocument/references` | Matching INCAR assignments in the current document | Experimental navigation |
+| `workspace/symbol` | Symbols from INCAR documents currently open in this server process | Experimental, open-buffer only |
+| `textDocument/rename` | INCAR assignments in currently open buffers; returns a `WorkspaceEdit` | Experimental, open-buffer only |
+
+These operations do not scan every file on disk and should not be described as
+workspace-wide rename or workspace-wide references. They remain available for
+existing users, but the boundaries above are part of the public contract.
+
+The repository also contains compatibility adapters for agent integrations.
+They are useful for existing callers, but new integrations should use the
+documented CLI envelopes or the native LSP server rather than depending on the
+legacy Python wrapper.
+
 ## Features Details
 
 ### Autocomplete
@@ -106,10 +137,11 @@ Format your VASP input files:
 ### Go-to-Definition and References
 Navigate INCAR tags:
 - **Definition**: Jump to the first occurrence of a tag
-- **References**: Find all occurrences of a tag in the document
+- **References**: Find all occurrences of a tag in the current document
 
 ### Rename
-Safe workspace-wide rename of INCAR tags with preview validation.
+Previewed rename of INCAR tags in the open buffers known to the server. It does
+not rewrite unopened files on disk.
 
 ### Quick Fixes
 Automatic fixes for common issues:
@@ -157,7 +189,7 @@ Error rather than being downgraded to hide schema gaps.
 Run `vasp-lsp-tool rules` to export the catalog as JSON. Add `--fail-on-blocking`
 to `vasp-lsp-check` for non-zero exit on blocking diagnostics.
 
-## Agent JSON API (Diagnostic Engine v1)
+## Agent JSON API and compatibility surfaces
 
 VASP-LSP ships a documented agent CLI surface for Claude Code, OpenCode, and
 Codex workflows:
@@ -181,25 +213,56 @@ vasp-lsp-schema-audit
 vasp-lsp-examples static
 vasp-lsp-tool next-tokens ISMEAR
 
-# Single-file agent queries (context, complete, hover, symbols, fix, validate).
+# Single-file agent queries (context, complete, hover, symbols, and fix).
 vasp-lsp-tool check path/to/INCAR
 vasp-lsp-tool context path/to/INCAR --line 5
 vasp-lsp-tool hover path/to/INCAR --line 0 --character 2
 vasp-lsp-tool symbols path/to/INCAR
 vasp-lsp-tool fix path/to/INCAR
-vasp-lsp-tool validate path/to/INCAR --binary /path/to/vasp
 ```
 
-Every payload includes a `capabilities` block listing the available operations,
-so callers can probe support without parsing free text.
+There are two intentionally different JSON envelopes:
+
+| Envelope | Entry points | Identifying fields | Use |
+| --- | --- | --- | --- |
+| `DiagnosticEnvelope/v1` | `vasp-lsp-tool check/context/complete/hover/symbols/fix` | `operation`, `uri`, `diagnostics`, `summary`, `capabilities` | Single-file agent operations and provider-shaped responses |
+| `vasp-lsp.plan24.v1` | `vasp-lsp-check`, `vasp-lsp-explain` | `schema_version`, `source`, `diagnostics`, `summary` | Calculation-directory checks and runtime-log explanations |
+
+The envelopes are related but not interchangeable. Consumers should dispatch
+on `schema_version` or `capabilities.operation` instead of assuming that every
+payload has the same top-level fields. Every agent payload also exposes a
+`capabilities` block where that CLI surface supports it.
+
+The agent operation adapter first looks for optional module-level provider
+hooks. If a hook is unavailable, it deliberately returns a generic fallback:
+text-based symbols/completions, diagnostic-derived hover text, or diagnostic
+fix hints. The fallback is deterministic and useful for automation, but it is
+not equivalent to the native editor providers and is reported through the
+operation status/source metadata.
+
+`vasp_lsp.agent_lsp.AgentLSP` remains as a compatibility wrapper for existing
+Python callers that use `from_text`/`from_path`. It delegates to the agent
+operation and diagnostic contracts; it is not a second LSP server and it does
+not provide disk-wide navigation. New integrations should use
+`vasp-lsp-tool`/`vasp-lsp-check` or connect to `vasp-lsp --stdio` directly.
+
+VASP dry-run is available only through the native LSP
+`workspace/executeCommand` command `vasp-lsp.validate`. The editor must have
+the document open, and a VASP binary must be supplied as the command argument
+or through `VASP_BINARY`/`VASP_LSP_VASP_BINARY`. It is not an operation of
+`vasp-lsp-tool`.
 
 ## Development
 
 ```bash
-git clone https://github.com/newtontech/VASP-LSP.git
+git clone https://github.com/hn-yu/VASP-LSP.git
 cd VASP-LSP
-pip install -e ".[dev]"
+uv sync --extra dev
 ```
+
+The original upstream repository is
+[newtontech/VASP-LSP](https://github.com/newtontech/VASP-LSP). This fork is
+[hn-yu/VASP-LSP](https://github.com/hn-yu/VASP-LSP).
 
 ## Testing
 

@@ -15,6 +15,7 @@ from lsprotocol.types import (
     SymbolKind,
 )
 
+from ..schemas.incar_tags import get_tag_info
 from ..workspace import document_kind
 
 _INCAR_TAG_RE = re.compile(r"^\s*(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=")
@@ -50,7 +51,7 @@ class DocumentSymbolsProvider:
 
     def _get_file_type(self, uri: str) -> str:
         """Determine file type from URI."""
-        return document_kind(uri).value
+        return str(document_kind(uri).value)
 
     def _get_incar_symbols(self, content: str) -> List[DocumentSymbol]:
         """Get document symbols for INCAR files.
@@ -393,6 +394,8 @@ class DocumentSymbolsProvider:
 
     def find_incar_tag_at_position(self, content: str, position: Position) -> Optional[str]:
         """Return the INCAR tag name at ``position``, if any."""
+        if position.line < 0 or position.character < 0:
+            return None
         lines = content.split("\n")
         if position.line >= len(lines):
             return None
@@ -401,9 +404,16 @@ class DocumentSymbolsProvider:
             return None
         start = match.start("name")
         end = match.end("name")
-        if position.character < start or position.character > end:
+        # LSP ranges are half-open: the cursor at ``end`` is already on the
+        # separator/value, not on the tag identifier itself.
+        if position.character < start or position.character >= end:
             return None
         return match.group("name").upper()
+
+    @staticmethod
+    def is_known_incar_tag(name: str) -> bool:
+        """Return whether ``name`` is a registered INCAR schema tag."""
+        return isinstance(name, str) and get_tag_info(name) is not None
 
     def find_incar_tag_occurrences(self, content: str) -> List[Tuple[str, int, int, int]]:
         """Return ``(tag, line, start, end)`` tuples for INCAR assignments."""
@@ -466,16 +476,14 @@ class DocumentSymbolsProvider:
         """Return the renameable range for an INCAR tag, if supported."""
         if self._get_file_type(document_uri) != "INCAR":
             return None
-        lines = content.split("\n")
-        if position.line >= len(lines):
+        if self.find_incar_tag_at_position(content, position) is None:
             return None
+        lines = content.split("\n")
         match = _INCAR_TAG_RE.match(lines[position.line])
         if not match:
             return None
         start = match.start("name")
         end = match.end("name")
-        if position.character < start or position.character > end:
-            return None
         return Range(
             start=Position(line=position.line, character=start),
             end=Position(line=position.line, character=end),

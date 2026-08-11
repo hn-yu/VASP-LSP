@@ -10,16 +10,62 @@
   "releaseVersion": "0.4.5",
   "filePatterns": [
     "INCAR",
+    "INCAR.*",
+    "INCAR_*",
     "POSCAR",
-    "KPOINTS",
-    "POTCAR",
+    "POSCAR.*",
+    "POSCAR_*",
     "CONTCAR",
-    "*.out"
+    "CONTCAR.*",
+    "CONTCAR_*",
+    "KPOINTS",
+    "KPOINTS.*",
+    "KPOINTS_*",
+    "POTCAR",
+    "OUTCAR",
+    "OSZICAR",
+    "STDOUT",
+    "STDERR",
+    "vasp.out",
+    "vasp.err",
+    "slurm-*.out",
+    "slurm-*.err",
+    "*.log"
   ],
   "maturity": "preview",
+  "featureScope": {
+    "coreEditor": [
+      "diagnostics",
+      "completion",
+      "hover",
+      "document-formatting",
+      "document-symbols",
+      "code-actions",
+      "document-sync"
+    ],
+    "workspaceDiagnostics": {
+      "status": "available",
+      "scope": "calculation-directory",
+      "overlayPrecedence": "open-buffer-before-disk",
+      "notes": "Recognized neighboring inputs are used for cross-file checks; binary restart files are checked by existence only."
+    },
+    "openBufferNavigation": {
+      "status": "experimental",
+      "definition": "current-open-document",
+      "references": "current-open-document",
+      "workspaceSymbols": "open-INCAR-documents-only",
+      "rename": "open-INCAR-documents-only",
+      "diskScan": false
+    },
+    "runtimeLogs": {
+      "status": "available",
+      "scope": "selected-failure-patterns",
+      "completeInterpreter": false
+    }
+  },
   "blockingPolicy": {
-    "mode": "warning-only",
-    "description": "Blocking errors stop agent run-gates; warnings are advisory with confidence and manual references."
+    "mode": "blocking-errors",
+    "description": "High-confidence errors can stop agent run-gates; warnings are advisory with confidence and manual references."
   },
   "capabilities": [
     "agent-envelope",
@@ -58,7 +104,15 @@
       "explain"
     ],
     "jsonFormat": true,
-    "failOnBlocking": true
+    "failOnBlocking": true,
+    "primary": true,
+    "jsonEnvelope": "DiagnosticEnvelope/v1",
+    "genericFallback": {
+      "status": "available",
+      "usedWhen": "No optional module-level provider hook is available",
+      "operations": ["complete", "hover", "symbols", "fix"],
+      "notEquivalentToNativeProviders": true
+    }
   },
   "diagnosticSchema": "rules/diagnostics.yaml",
   "validationBackends": [
@@ -96,6 +150,36 @@
       "notes": "Runtime log diagnostics via vasp-lsp-explain / PLAN24 explain envelope."
     }
   ],
+  "jsonEnvelopes": [
+    {
+      "id": "DiagnosticEnvelope/v1",
+      "commands": [
+        "vasp-lsp-tool check",
+        "vasp-lsp-tool context",
+        "vasp-lsp-tool complete",
+        "vasp-lsp-tool hover",
+        "vasp-lsp-tool symbols",
+        "vasp-lsp-tool fix"
+      ],
+      "requiredTopLevelFields": [
+        "operation",
+        "uri",
+        "diagnostics",
+        "summary",
+        "capabilities"
+      ]
+    },
+    {
+      "id": "vasp-lsp.plan24.v1",
+      "commands": ["vasp-lsp-check", "vasp-lsp-explain"],
+      "requiredTopLevelFields": [
+        "schema_version",
+        "source",
+        "diagnostics",
+        "summary"
+      ]
+    }
+  ],
   "wikiPaths": {
     "rawAssets": "raw/assets",
     "entities": "wiki/entities",
@@ -125,6 +209,20 @@
     "repoName": "VASP-LSP",
     "contextContract": "DSLAuthoringContext",
     "diagnosticEnvelope": "DiagnosticEnvelope/v1"
+  },
+  "compatibility": {
+    "agentLspWrapper": {
+      "module": "vasp_lsp.agent_lsp",
+      "class": "AgentLSP",
+      "status": "compatibility-wrapper",
+      "recommendedForNewIntegrations": false,
+      "replacement": "vasp-lsp-tool or the native vasp-lsp --stdio server"
+    },
+    "richDiagnosticsAdapter": {
+      "module": "vasp_lsp.rich_diagnostics",
+      "status": "compatibility-and-serialization-layer",
+      "newIntegrations": "Use the documented JSON envelopes rather than importing this module directly."
+    }
   },
   "sourceProvenance": [
     {

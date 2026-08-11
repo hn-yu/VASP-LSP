@@ -8,16 +8,23 @@ from typing import Dict, List, Optional
 
 import pytest
 from lsprotocol.types import (
+    DefinitionParams,
     Diagnostic,
     DocumentSymbolParams,
     Position,
+    PrepareRenameParams,
+    ReferenceContext,
+    ReferenceParams,
     RenameParams,
     TextDocumentIdentifier,
 )
 
 from vasp_lsp.server import (
     VASPLanguageServer,
+    definition,
     document_symbol,
+    prepare_rename,
+    references,
     rename,
 )
 
@@ -145,14 +152,14 @@ class TestRenameLSP:
         params = RenameParams(
             text_document=TextDocumentIdentifier(uri=INCAR_URI),
             position=Position(line=0, character=2),
-            new_name="ENCUT_NEW",
+            new_name="EDIFF",
         )
         result = rename(params)
         assert result is not None
         assert INCAR_URI in result.changes
         edits = result.changes[INCAR_URI]
         assert len(edits) == 1
-        assert edits[0].new_text == "ENCUT_NEW"
+        assert edits[0].new_text == "EDIFF"
 
     def test_rename_multiple_occurrences(self, server):
         content = "ENCUT = 520\nENCUT = 400\n"
@@ -161,12 +168,40 @@ class TestRenameLSP:
         params = RenameParams(
             text_document=TextDocumentIdentifier(uri=INCAR_URI),
             position=Position(line=0, character=0),
-            new_name="PLANEWAVE",
+            new_name="EDIFF",
         )
         result = rename(params)
         assert result is not None
         edits = result.changes[INCAR_URI]
         assert len(edits) == 2
+
+    def test_rename_rejects_unknown_schema_tag(self, server):
+        """Rename must not create an INCAR tag that validation calls unknown."""
+        server.set_document_content(INCAR_URI, "ENCUT = 520\n")
+
+        params = RenameParams(
+            text_document=TextDocumentIdentifier(uri=INCAR_URI),
+            position=Position(line=0, character=2),
+            new_name="NOT_A_VASP_TAG",
+        )
+
+        assert rename(params) is None
+
+    @pytest.mark.parametrize(
+        "new_name",
+        ["", "   ", "123INVALID", "ENCUT_NEW"],
+    )
+    def test_rename_rejects_empty_or_invalid_schema_names(self, server, new_name):
+        """Rename rejects empty, syntactically invalid, and unknown names."""
+        server.set_document_content(INCAR_URI, "ENCUT = 520\n")
+
+        params = RenameParams(
+            text_document=TextDocumentIdentifier(uri=INCAR_URI),
+            position=Position(line=0, character=2),
+            new_name=new_name,
+        )
+
+        assert rename(params) is None
 
     def test_rename_not_on_tag_returns_none(self, server):
         content = "# comment\n"
@@ -224,3 +259,80 @@ class TestRenameLSP:
         )
         result = rename(params)
         assert result is None
+
+    @pytest.mark.parametrize(
+        "position",
+        [
+            Position(line=0, character=5),
+            Position(line=999, character=0),
+        ],
+    )
+    def test_rename_rejects_empty_or_out_of_bounds_position(self, server, position):
+        """Rename must reject a cursor outside the tag or document."""
+        server.set_document_content(INCAR_URI, "ENCUT = 520\n")
+
+        params = RenameParams(
+            text_document=TextDocumentIdentifier(uri=INCAR_URI),
+            position=position,
+            new_name="EDIFF",
+        )
+
+        assert rename(params) is None
+
+    def test_rename_updates_open_documents_only(self, server, tmp_path):
+        """Rename scope is the in-memory set of opened INCAR documents only."""
+        other_open_uri = "file:///workspace/other/INCAR"
+        closed_path = tmp_path / "closed" / "INCAR"
+        closed_path.parent.mkdir()
+        closed_path.write_text("ENCUT = 100\n", encoding="utf-8")
+
+        server.set_document_content(INCAR_URI, "ENCUT = 520\n")
+        server.set_document_content(other_open_uri, "ENCUT = 400\n")
+
+        params = RenameParams(
+            text_document=TextDocumentIdentifier(uri=INCAR_URI),
+            position=Position(line=0, character=2),
+            new_name="EDIFF",
+        )
+
+        result = rename(params)
+
+        assert result is not None
+        assert set(result.changes) == {INCAR_URI, other_open_uri}
+        assert closed_path.as_uri() not in result.changes
+
+    def test_prepare_rename_and_reference_handlers_reject_invalid_positions(self, server):
+        """All navigation handlers must reject empty and past-end positions."""
+        server.set_document_content(INCAR_URI, "ENCUT = 520\n")
+        invalid_positions = [
+            Position(line=0, character=5),
+            Position(line=99, character=0),
+        ]
+
+        for position in invalid_positions:
+            prepare_params = PrepareRenameParams(
+                text_document=TextDocumentIdentifier(uri=INCAR_URI),
+                position=position,
+            )
+            definition_params = DefinitionParams(
+                text_document=TextDocumentIdentifier(uri=INCAR_URI),
+                position=position,
+            )
+            reference_params = ReferenceParams(
+                text_document=TextDocumentIdentifier(uri=INCAR_URI),
+                position=position,
+                context=ReferenceContext(include_declaration=True),
+            )
+
+            assert prepare_rename(prepare_params) is None
+            assert definition(definition_params) is None
+            assert references(reference_params) == []
+
+        server.set_document_content(INCAR_URI, "")
+        empty_position = Position(line=0, character=0)
+        assert prepare_rename(
+            PrepareRenameParams(
+                text_document=TextDocumentIdentifier(uri=INCAR_URI),
+                position=empty_position,
+            )
+        ) is None

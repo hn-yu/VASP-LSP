@@ -86,6 +86,72 @@ def test_directory_check_skips_vaspkit_metadata_file(tmp_path) -> None:
     )
 
 
+def test_tool_and_check_entrypoints_share_directory_diagnostics(tmp_path, capsys) -> None:
+    """The two check envelopes must serialize the same collected diagnostics."""
+    (tmp_path / "INCAR").write_text("ENCUT = 250\n", encoding="utf-8")
+    (tmp_path / "POSCAR").write_text(
+        "Si\n"
+        "1\n"
+        "5 0 0\n"
+        "0 5 0\n"
+        "0 0 5\n"
+        "Si\n"
+        "1\n"
+        "Direct\n"
+        "0 0 0\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "POTCAR").write_text(
+        "TITEL = PAW_PBE Si 05Jan2001\n"
+        "ENMAX = 400; ENMIN = 300\n",
+        encoding="utf-8",
+    )
+
+    assert tool.main(["check", str(tmp_path)]) == 0
+    tool_payload = json.loads(capsys.readouterr().out)
+
+    assert tool.check_main([str(tmp_path), "--format", "json"]) == 0
+    check_payload = json.loads(capsys.readouterr().out)
+
+    tool_codes = sorted(
+        (item["code"], item["severity"]) for item in tool_payload["diagnostics"]
+    )
+    check_codes = sorted(
+        (item["id"], item["severity"]) for item in check_payload["diagnostics"]
+    )
+
+    assert tool_codes == check_codes
+    assert tool_codes == [("vasp.encut.below_enmax", "warning")]
+
+
+def test_check_entrypoints_stabilize_empty_unreadable_and_binary_targets(
+    tmp_path, monkeypatch
+) -> None:
+    empty = tmp_path / "INCAR"
+    unreadable = tmp_path / "INCAR.unreadable"
+    wavecar = tmp_path / "WAVECAR"
+    chgcar = tmp_path / "CHGCAR"
+    empty.write_text("", encoding="utf-8")
+    unreadable.write_text("ENCUT = 520\n", encoding="utf-8")
+    wavecar.write_bytes(b"binary wavefunction payload")
+    chgcar.write_bytes(b"binary charge density payload")
+
+    original_read_text = tool._read_text
+
+    def read_text(path):
+        if path == unreadable:
+            raise PermissionError("test-only unreadable target")
+        if path in {wavecar, chgcar}:
+            raise AssertionError(f"binary target should not be read: {path.name}")
+        return original_read_text(path)
+
+    monkeypatch.setattr(tool, "_read_text", read_text)
+
+    for target in (empty, unreadable, wavecar, chgcar):
+        assert tool.check_path(target)["ok"] is True
+        assert tool.check_target(target)["ok"] is True
+
+
 def test_diagnostics_reuses_unchanged_potcar_parse(monkeypatch) -> None:
     poscar = """Test
 1.0
