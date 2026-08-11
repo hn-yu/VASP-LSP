@@ -14,6 +14,22 @@ from .rich_diagnostics import agent_check_payload, diagnostic_to_dict
 SOFTWARE = "vasp"
 PLAN24_SCHEMA_VERSION = "vasp-lsp.plan24.v1"
 
+_WORKSPACE_DOCUMENT_NAMES = frozenset(
+    {
+        "INCAR",
+        "POSCAR",
+        "CONTCAR",
+        "KPOINTS",
+        "POTCAR",
+        "OUTCAR",
+        "OSZICAR",
+        "STDOUT",
+        "STDERR",
+        "VASP.OUT",
+        "VASP.ERR",
+    }
+)
+
 
 def _file_type(path: Path) -> str:
     name = path.name.upper()
@@ -92,7 +108,7 @@ def _collect_plan24_check_diagnostics(path: Path) -> list[tuple[Path, list[Any]]
         workspace_documents = _workspace_documents(path)
         results: list[tuple[Path, list[Any]]] = []
         for candidate in sorted(path.iterdir()):
-            if not candidate.is_file() or candidate.name.startswith("."):
+            if not _is_workspace_document(candidate):
                 continue
             file_type = provider._get_file_type(candidate.resolve().as_uri())
             if file_type == "UNKNOWN":
@@ -156,7 +172,7 @@ def _workspace_documents(directory: Path) -> dict[str, str]:
         return {}
     documents: dict[str, str] = {}
     for path in sorted(directory.iterdir()):
-        if path.is_file() and not path.name.startswith("."):
+        if _is_workspace_document(path):
             try:
                 documents[path.resolve().as_uri()] = _read_text(path)
             except OSError:
@@ -165,6 +181,23 @@ def _workspace_documents(directory: Path) -> dict[str, str]:
                 # not prevent checking the requested INCAR.
                 continue
     return documents
+
+
+def _is_workspace_document(path: Path) -> bool:
+    """Return whether *path* is a small VASP text document worth loading.
+
+    Calculation directories commonly contain multi-gigabyte binary artifacts
+    such as WAVECAR and CHGCAR. They are not inputs to the static text
+    diagnostics, so reading them as UTF-8 merely adds I/O and memory pressure.
+    Keep this allowlist deliberately narrow; in particular, POTCAR.spec is a
+    VASPKIT metadata record, not a POTCAR document.
+    """
+    if not path.is_file() or path.name.startswith("."):
+        return False
+    name = path.name.upper()
+    if name in _WORKSPACE_DOCUMENT_NAMES:
+        return True
+    return name.startswith("SLURM-") and name.endswith((".OUT", ".ERR"))
 
 
 def _read_text(path: Path) -> str:

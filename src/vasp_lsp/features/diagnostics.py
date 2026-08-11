@@ -4,7 +4,8 @@ import json
 import math
 import os
 import re
-from typing import Any, Dict, List, Optional
+from collections import OrderedDict
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.parse import unquote, urlparse
 
 from lsprotocol.types import Diagnostic, DiagnosticSeverity, Position, Range
@@ -167,9 +168,17 @@ def _normalise_poscar_species_name(name: str) -> str:
 class DiagnosticsProvider:
     """Provides diagnostics (error checking) for VASP files."""
 
+    _NEIGHBOR_CACHE_LIMIT = 32
+
     def __init__(self):
         """Initialize diagnostics provider."""
-        pass
+        # Neighbor inputs are immutable from the provider's perspective: the
+        # current document is supplied afresh on every LSP change, while these
+        # parsed objects can be reused until their content changes. The
+        # content is part of the key so external edits invalidate naturally.
+        self._neighbor_parser_cache: OrderedDict[
+            Tuple[str, str], Any
+        ] = OrderedDict()
 
     def get_diagnostics(
         self,
@@ -1973,7 +1982,11 @@ class DiagnosticsProvider:
         if content is None:
             content = self._read_neighbor(document_uri, "CONTCAR", workspace_documents)
         return (
-            POSCARParser(content, allow_post_coordinate_data=True)
+            self._cached_neighbor_parser(
+                "POSCAR",
+                content,
+                lambda value: POSCARParser(value, allow_post_coordinate_data=True),
+            )
             if content is not None
             else None
         )
@@ -1982,13 +1995,40 @@ class DiagnosticsProvider:
         self, document_uri: str, workspace_documents: Optional[Dict[str, str]]
     ) -> Optional[KPOINTSParser]:
         content = self._read_neighbor(document_uri, "KPOINTS", workspace_documents)
-        return KPOINTSParser(content) if content is not None else None
+        return (
+            self._cached_neighbor_parser("KPOINTS", content, KPOINTSParser)
+            if content is not None
+            else None
+        )
 
     def _parse_neighbor_potcar(
         self, document_uri: str, workspace_documents: Optional[Dict[str, str]]
     ) -> Optional[POTCARParser]:
         content = self._read_neighbor(document_uri, "POTCAR", workspace_documents)
-        return POTCARParser(content) if content is not None else None
+        return (
+            self._cached_neighbor_parser("POTCAR", content, POTCARParser)
+            if content is not None
+            else None
+        )
+
+    def _cached_neighbor_parser(
+        self,
+        parser_kind: str,
+        content: str,
+        factory: Callable[[str], Any],
+    ) -> Any:
+        """Return a bounded cached parser for unchanged neighbor content."""
+        key = (parser_kind, content)
+        cached = self._neighbor_parser_cache.pop(key, None)
+        if cached is not None:
+            self._neighbor_parser_cache[key] = cached
+            return cached
+
+        parser = factory(content)
+        self._neighbor_parser_cache[key] = parser
+        if len(self._neighbor_parser_cache) > self._NEIGHBOR_CACHE_LIMIT:
+            self._neighbor_parser_cache.popitem(last=False)
+        return parser
 
     def _read_neighbor(
         self,

@@ -47,6 +47,7 @@ class KPOINTSParser:
         self.lines = content.split("\n")
         self.data: Optional[KPOINTSData] = None
         self.errors: List[Dict[str, Any]] = []
+        self._parsed = False
 
     def parse(self) -> Optional[KPOINTSData]:
         """Parse the KPOINTS file content.
@@ -54,6 +55,9 @@ class KPOINTSParser:
         Returns:
             KPOINTSData object if successful, None otherwise.
         """
+        if self._parsed:
+            return self.data
+        self._parsed = True
         self.errors = []
 
         try:
@@ -79,11 +83,11 @@ class KPOINTSParser:
 
             # Check for automatic mode
             if line2 == "a" or line2 == "automatic":
-                return self._parse_automatic_mode(comment, line_idx)
+                return self._store_data(self._parse_automatic_mode(comment, line_idx))
 
             # Check for line mode
             if "line" in line2:
-                return self._parse_line_mode(comment, line_idx)
+                return self._store_data(self._parse_line_mode(comment, line_idx))
 
             # Try to parse as number
             try:
@@ -113,26 +117,34 @@ class KPOINTSParser:
             line_idx += 1
 
             if "line" in line3:
-                return self._parse_line_mode(comment, line_idx - 2)
+                return self._store_data(self._parse_line_mode(comment, line_idx - 2))
             if line3.startswith("r"):
                 # Reciprocal coordinates (standard for explicit k-points)
-                return self._parse_explicit_mode(
-                    comment, nkpoints, line_idx, reciprocal=True
+                return self._store_data(
+                    self._parse_explicit_mode(
+                        comment, nkpoints, line_idx, reciprocal=True
+                    )
                 )
             elif line3.startswith("c") or line3.startswith("k"):
                 # Cartesian coordinates in units of 2π/a
-                return self._parse_explicit_mode(
-                    comment, nkpoints, line_idx, reciprocal=False
+                return self._store_data(
+                    self._parse_explicit_mode(
+                        comment, nkpoints, line_idx, reciprocal=False
+                    )
                 )
             elif line3.startswith("g"):
                 # Gamma-centered
-                return self._parse_gamma_monkhorst_mode(
-                    comment, nkpoints, line_idx, gamma_centered=True
+                return self._store_data(
+                    self._parse_gamma_monkhorst_mode(
+                        comment, nkpoints, line_idx, gamma_centered=True
+                    )
                 )
             elif line3.startswith("m"):
                 # Monkhorst-Pack
-                return self._parse_gamma_monkhorst_mode(
-                    comment, nkpoints, line_idx, gamma_centered=False
+                return self._store_data(
+                    self._parse_gamma_monkhorst_mode(
+                        comment, nkpoints, line_idx, gamma_centered=False
+                    )
                 )
             else:
                 self.errors.append(
@@ -153,6 +165,11 @@ class KPOINTSParser:
                 }
             )
             return None
+
+    def _store_data(self, data: Optional[KPOINTSData]) -> Optional[KPOINTSData]:
+        """Store a parsed result so repeated reads return the same object."""
+        self.data = data
+        return self.data
 
     def _parse_automatic_mode(
         self, comment: str, line_idx: int

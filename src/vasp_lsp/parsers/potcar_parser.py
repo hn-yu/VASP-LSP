@@ -36,10 +36,15 @@ class POTCARParser:
         """Initialize parser with POTCAR content."""
         self.content = content
         self.lines = content.splitlines()
+        self.data: Optional[POTCARData] = None
         self.errors: List[Dict[str, Any]] = []
+        self._parsed = False
 
     def parse(self) -> Optional[POTCARData]:
         """Parse POTCAR dataset titles and cutoff metadata."""
+        if self._parsed:
+            return self.data
+        self._parsed = True
         self.errors = []
         entries: List[POTCAREntry] = []
         current: Optional[POTCAREntry] = None
@@ -82,7 +87,8 @@ class POTCARParser:
             )
             return None
 
-        return POTCARData(entries=entries)
+        self.data = POTCARData(entries=entries)
+        return self.data
 
     def _looks_like_title(self, line: str) -> bool:
         if not line:

@@ -77,6 +77,7 @@ class POSCARParser:
         self.allow_post_coordinate_data = allow_post_coordinate_data
         self.data: Optional[POSCARData] = None
         self.errors: List[Dict[str, Any]] = []
+        self._parsed = False
 
     def parse(self) -> Optional[POSCARData]:
         """Parse the POSCAR file content.
@@ -84,6 +85,9 @@ class POSCARParser:
         Returns:
             POSCARData object if successful, None otherwise.
         """
+        if self._parsed:
+            return self.data
+        self._parsed = True
         self.errors = []
 
         try:
