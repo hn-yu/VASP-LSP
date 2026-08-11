@@ -26,6 +26,9 @@ class POTCARParser:
     """Parse enough POTCAR metadata for static validation."""
 
     TITEL_REGEX = re.compile(r"^\s*TITEL\s*=\s*(?P<title>.+?)\s*$", re.IGNORECASE)
+    VRHFIN_REGEX = re.compile(
+        r"^\s*VRHFIN\s*=\s*(?P<element>[A-Z][a-z]?)\s*:", re.IGNORECASE
+    )
     ENMAX_REGEX = re.compile(r"ENMAX\s*=\s*([-+]?\d+(?:\.\d+)?)", re.IGNORECASE)
     ENMIN_REGEX = re.compile(r"ENMIN\s*=\s*([-+]?\d+(?:\.\d+)?)", re.IGNORECASE)
 
@@ -53,6 +56,11 @@ class POTCARParser:
                 continue
 
             if current:
+                if current.element == "Unknown":
+                    vrhfin_match = self.VRHFIN_REGEX.match(line)
+                    if vrhfin_match:
+                        current.element = vrhfin_match.group("element").capitalize()
+
                 enmax_match = self.ENMAX_REGEX.search(line)
                 if enmax_match:
                     current.enmax = float(enmax_match.group(1))
@@ -93,8 +101,13 @@ class POTCARParser:
             token = part.split("_")[0]
             if token in ignored:
                 continue
-            if re.fullmatch(r"[A-Z][a-z]?", token):
-                return token
+            # Hydrogen-like VASP datasets use labels such as H.75 and
+            # H1.25.  The suffix is a fractional valence, not part of the
+            # chemical symbol; retain only the leading one- or two-letter
+            # element token.
+            match = re.match(r"(?P<element>[A-Z][a-z]?)(?=$|[./0-9])", token)
+            if match:
+                return match.group("element")
         if len(parts) == 1:
             match = re.match(r"([A-Z][a-z]?)", parts[0].split("_")[0])
             if match:

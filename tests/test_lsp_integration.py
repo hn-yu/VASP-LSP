@@ -65,6 +65,7 @@ from vasp_lsp.server import (
 
 INCAR_URI = "file:///workspace/INCAR"
 POSCAR_URI = "file:///workspace/POSCAR"
+POTCAR_URI = "file:///workspace/POTCAR"
 KPOINTS_URI = "file:///workspace/KPOINTS"
 
 
@@ -389,6 +390,13 @@ class TestDiagnostics:
         diags = server.published_diagnostics.get(POSCAR_URI, [])
         # Zero-length lattice vectors should produce errors
         assert any("zero" in d.message.lower() for d in diags)
+
+    def test_potcar_diagnostics_via_did_open(self, server: _CaptureServer) -> None:
+        """Opening a POTCAR reports parser errors instead of staying silent."""
+        text_document_did_open(_make_did_open(POTCAR_URI, "not a POTCAR dataset\n"))
+
+        diags = server.published_diagnostics.get(POTCAR_URI, [])
+        assert any("potcar parse error" in d.message.lower() for d in diags)
 
     def test_kpoints_diagnostics_via_did_open(self, server: _CaptureServer) -> None:
         """Opening a KPOINTS file triggers diagnostics."""

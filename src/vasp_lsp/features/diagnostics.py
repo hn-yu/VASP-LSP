@@ -143,6 +143,27 @@ def _is_valid_boolean_schema_value(tag: Any, value: Any) -> bool:
     return False
 
 
+def _normalise_poscar_species_name(name: str) -> str:
+    """Return the species token VASP uses for POSCAR/POTCAR comparisons.
+
+    VASP uses at most the first two characters of a POSCAR species name. VASP
+    6 CONTCAR files can also append a potential hash, for example
+    ``H_h/143491dc``. The hash and potential suffix are labels, not a new
+    chemical element, so remove them before comparing against POTCAR metadata.
+    """
+    token = name.strip()
+    has_hash = "/" in token
+    token = token.split("/", 1)[0]
+    if "_" in token:
+        token = token.split("_", 1)[0]
+    element_match = re.match(r"(?P<element>[A-Z][a-z]?)(?=$|[./0-9])", token)
+    if element_match:
+        return element_match.group("element")
+    if has_hash or len(token) > 2:
+        return token[:2]
+    return token
+
+
 class DiagnosticsProvider:
     """Provides diagnostics (error checking) for VASP files."""
 
@@ -172,7 +193,13 @@ class DiagnosticsProvider:
                 document_content, document_uri, workspace_documents
             )
         elif file_type == "POSCAR":
-            return self._get_poscar_diagnostics(document_content)
+            return self._get_poscar_diagnostics(
+                document_content, document_uri, workspace_documents
+            )
+        elif file_type == "POTCAR":
+            return self._get_potcar_diagnostics(
+                document_content, document_uri, workspace_documents
+            )
         elif file_type == "KPOINTS":
             return self._get_kpoints_diagnostics(document_content)
         elif file_type == "VASP_LOG":
@@ -196,7 +223,7 @@ class DiagnosticsProvider:
 
         Returns a dict with keys:
           - uri: the document URI
-          - file_type: INCAR, POSCAR, KPOINTS, or UNKNOWN
+          - file_type: INCAR, POSCAR, KPOINTS, POTCAR, or UNKNOWN
           - diagnostics: list of dicts (message, severity, line, character, source)
           - summary: counts by severity
           - calculation_mode: detected mode (if INCAR)
@@ -300,6 +327,8 @@ class DiagnosticsProvider:
 
         if "INCAR" in upper_filename:
             return "INCAR"
+        if "POTCAR" in upper_filename:
+            return "POTCAR"
         if "POSCAR" in upper_filename or "CONTCAR" in upper_filename:
             return "POSCAR"
         if "KPOINTS" in upper_filename:
@@ -1461,21 +1490,14 @@ class DiagnosticsProvider:
                 )
             )
 
+        first_param = next(iter(parser.get_all_parameters().values()), None)
+        if potcar:
+            diagnostics.extend(self._potcar_parse_error_diagnostics(potcar, first_param))
+
         if potcar_data and poscar_data:
-            potcar_species = [entry.element for entry in potcar_data.entries]
-            if (
-                poscar_data.atom_types
-                and poscar_data.atom_types
-                != potcar_species[: len(poscar_data.atom_types)]
-            ):
-                first_param = next(iter(parser.get_all_parameters().values()), None)
-                diagnostics.append(
-                    self._workspace_warning(
-                        first_param,
-                        "POSCAR species order "
-                        f"{', '.join(poscar_data.atom_types)} differs from POTCAR order {', '.join(potcar_species)}.",
-                    )
-                )
+            diagnostics.extend(
+                self._check_poscar_potcar_species(poscar_data, potcar_data, first_param)
+            )
 
             # Check for POTCAR functional mixing (e.g., PBE + LDA)
             if len(potcar_data.entries) > 1:
@@ -2004,8 +2026,13 @@ class DiagnosticsProvider:
             return None
         return unquote(parsed.path)
 
-    def _get_poscar_diagnostics(self, content: str) -> List[Diagnostic]:
-        """Get diagnostics for POSCAR files."""
+    def _get_poscar_diagnostics(
+        self,
+        content: str,
+        document_uri: str,
+        workspace_documents: Optional[Dict[str, str]],
+    ) -> List[Diagnostic]:
+        """Get diagnostics for POSCAR files, including POTCAR consistency."""
         diagnostics = []
         # POSCAR/CONTCAR may legally contain velocity data after the ionic
         # coordinates; CONTCAR from MD additionally contains predictor-
@@ -2118,6 +2145,120 @@ class DiagnosticsProvider:
             else:
                 diagnostics.extend(self._check_close_atoms_direct(result))
 
+            potcar = self._parse_neighbor_potcar(document_uri, workspace_documents)
+            if potcar:
+                potcar_data = potcar.parse()
+                diagnostics.extend(self._potcar_parse_error_diagnostics(potcar))
+                if potcar_data:
+                    diagnostics.extend(
+                        self._check_poscar_potcar_species(result, potcar_data)
+                    )
+
+        return diagnostics
+
+    def _get_potcar_diagnostics(
+        self,
+        content: str,
+        document_uri: str,
+        workspace_documents: Optional[Dict[str, str]],
+    ) -> List[Diagnostic]:
+        """Get diagnostics for POTCAR files and their neighbouring POSCAR."""
+        diagnostics: List[Diagnostic] = []
+        parser = POTCARParser(content)
+        result = parser.parse()
+        diagnostics.extend(self._potcar_parse_error_diagnostics(parser))
+        if result is None:
+            return diagnostics
+
+        poscar = self._parse_neighbor_poscar(document_uri, workspace_documents)
+        poscar_data = poscar.parse() if poscar else None
+        if poscar_data:
+            diagnostics.extend(self._check_poscar_potcar_species(poscar_data, result))
+        return diagnostics
+
+    def _check_poscar_potcar_species(
+        self, poscar_data, potcar_data, anchor=None
+    ) -> List[Diagnostic]:
+        """Check POSCAR species groups against the complete POTCAR sequence."""
+        diagnostics: List[Diagnostic] = []
+        if not potcar_data.entries:
+            # A parser failure is reported separately; do not turn an empty
+            # failed parse into a misleading species-count warning.
+            return diagnostics
+        expected_count = len(poscar_data.atom_counts)
+        actual_count = len(potcar_data.entries)
+        if expected_count != actual_count:
+            diagnostics.append(
+                self._workspace_warning(
+                    anchor,
+                    "POSCAR defines "
+                    f"{expected_count} species groups but POTCAR contains "
+                    f"{actual_count} pseudopotential datasets.",
+                )
+            )
+            return diagnostics
+
+        potcar_species = [entry.element for entry in potcar_data.entries]
+        unknown_positions = [
+            index + 1
+            for index, species in enumerate(potcar_species)
+            if species == "Unknown"
+        ]
+        if unknown_positions:
+            positions = ", ".join(str(position) for position in unknown_positions)
+            diagnostics.append(
+                self._workspace_warning(
+                    anchor,
+                    "Cannot verify POSCAR/POTCAR species mapping: "
+                    f"POTCAR dataset position(s) {positions} have unrecognized species names.",
+                )
+            )
+            return diagnostics
+
+        # VASP 4 POSCAR files omit species names. Their species identity comes
+        # from POTCAR, so Type1/Type2 placeholders must never be compared.
+        if not poscar_data.has_explicit_atom_types:
+            return diagnostics
+
+        poscar_species = [
+            _normalise_poscar_species_name(name) for name in poscar_data.atom_types
+        ]
+
+        if poscar_species != potcar_species:
+            diagnostics.append(
+                self._workspace_warning(
+                    anchor,
+                    "POSCAR species order "
+                    f"{', '.join(poscar_data.atom_types)} differs from POTCAR order "
+                    f"{', '.join(potcar_species)}.",
+                )
+            )
+        return diagnostics
+
+    def _potcar_parse_error_diagnostics(
+        self, parser: POTCARParser, anchor=None
+    ) -> List[Diagnostic]:
+        """Expose POTCAR parser errors instead of treating them as order mismatches."""
+        diagnostics: List[Diagnostic] = []
+        for error in parser.get_errors():
+            message = f"POTCAR parse error: {error['message']}"
+            if anchor is not None:
+                diagnostics.append(
+                    self._workspace_diagnostic(anchor, message, DiagnosticSeverity.Error)
+                )
+                continue
+            line_index = max(int(error.get("line", 1)) - 1, 0)
+            diagnostics.append(
+                Diagnostic(
+                    range=Range(
+                        start=Position(line=line_index, character=0),
+                        end=Position(line=line_index, character=1),
+                    ),
+                    message=message,
+                    severity=DiagnosticSeverity.Error,
+                    source="vasp-lsp",
+                )
+            )
         return diagnostics
 
     def _check_poscar_structure(self, result) -> List[Diagnostic]:
@@ -2154,7 +2295,9 @@ class DiagnosticsProvider:
         invalid_elements = [
             element
             for element in result.atom_types
-            if not re.fullmatch(r"[A-Z][a-z]?", element)
+            if not re.fullmatch(
+                r"[A-Z][a-z]?", _normalise_poscar_species_name(element)
+            )
         ]
         if invalid_elements and not all(
             element.startswith("Type") for element in invalid_elements
