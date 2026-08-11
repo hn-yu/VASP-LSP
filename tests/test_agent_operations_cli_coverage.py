@@ -169,3 +169,111 @@ def test_agent_lsp_and_cli_non_check_operations(tmp_path: Path, capsys: Any) -> 
     payload = json.loads(capsys.readouterr().out)
     assert payload["operation"] == "symbols"
     assert payload["capabilities"]["operation"] == "symbols"
+
+
+def test_real_lsp_providers_are_primary_and_report_their_source(tmp_path: Path) -> None:
+    path = _write_incar(tmp_path, "EDIFF = 1E-5\nISMEAR = 0\n")
+
+    def no_diagnostics(_: Path) -> list[dict[str, Any]]:
+        return []
+
+    complete = ops.operation_path(
+        path,
+        "complete",
+        software="vasp",
+        file_type_func=_file_type,
+        collect_diagnostics=no_diagnostics,
+        line=0,
+        character=1,
+    )
+    assert complete["result_source"] == "provider"
+    assert complete["fallback"] is False
+    assert any(item["label"] == "EDIFF" for item in complete["items"])
+    assert all(item["source"] == "provider" for item in complete["items"])
+
+    hover = ops.operation_path(
+        path,
+        "hover",
+        software="vasp",
+        file_type_func=_file_type,
+        collect_diagnostics=no_diagnostics,
+        line=0,
+        character=1,
+    )
+    assert hover["result_source"] == "provider"
+    assert hover["fallback"] is False
+    assert "EDIFF" in str(hover["contents"])
+
+    symbols = ops.operation_path(
+        path,
+        "symbols",
+        software="vasp",
+        file_type_func=_file_type,
+        collect_diagnostics=no_diagnostics,
+    )
+    assert symbols["result_source"] == "provider"
+    assert symbols["fallback"] is False
+    assert [item["name"] for item in symbols["items"][:2]] == ["EDIFF", "ISMEAR"]
+    assert all(item["source"] == "provider" for item in symbols["items"])
+
+
+def test_real_quickfix_provider_is_used_for_fix_operation(tmp_path: Path) -> None:
+    path = _write_incar(tmp_path, "ISMEAR = 0\n")
+    diagnostic = {
+        "code": "vasp.incar.sigma_missing",
+        "severity": "warning",
+        "source": "vasp-lsp",
+        "message": "ISMEAR >= 0 should have SIGMA set",
+        "range": {
+            "start": {"line": 0, "character": 0},
+            "end": {"line": 0, "character": 10},
+        },
+        "fix_hints": [],
+        "blocking": False,
+    }
+
+    payload = ops.operation_path(
+        path,
+        "fix",
+        software="vasp",
+        file_type_func=_file_type,
+        collect_diagnostics=lambda _: [diagnostic],
+        line=0,
+        character=1,
+    )
+
+    assert payload["result_source"] == "provider"
+    assert payload["fallback"] is False
+    assert any("SIGMA" in action["title"] for action in payload["actions"])
+    assert all(action["source"] == "provider" for action in payload["actions"])
+    assert any(action["edit"] is not None for action in payload["actions"])
+
+
+def test_generic_results_are_explicitly_marked_as_fallback(tmp_path: Path) -> None:
+    path = tmp_path / "unknown.input"
+    path.write_text("CUSTOM_PARAMETER = 1\n", encoding="utf-8")
+
+    payload = ops.operation_path(
+        path,
+        "complete",
+        software="vasp",
+        file_type_func=lambda _: "UNKNOWN",
+        collect_diagnostics=lambda _: [],
+    )
+
+    assert payload["result_source"] == "fallback"
+    assert payload["fallback"] is True
+    assert payload["items"][0]["source"] == "fallback"
+
+
+def test_agent_lsp_text_defaults_to_incar_and_exposes_fix(tmp_path: Path) -> None:
+    agent = AgentLSP.from_text("ISMEAR = 0\n")
+
+    complete = agent.complete(line=0, character=1)
+    assert complete["file_type"] == "INCAR"
+    assert complete["uri"] == "file:///input"
+    assert complete["result_source"] == "provider"
+
+    fix = agent.fix(line=0, character=1)
+    assert fix["operation"] == "fix"
+    assert fix["file_type"] == "INCAR"
