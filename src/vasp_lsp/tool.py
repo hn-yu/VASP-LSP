@@ -30,6 +30,7 @@ _WORKSPACE_DOCUMENT_NAMES = frozenset(
         "VASP.ERR",
     }
 )
+_BINARY_ARTIFACT_NAMES = frozenset({"CHG", "CHGCAR", "WAVECAR", "WAVEDER"})
 
 
 def _file_type(path: Path) -> str:
@@ -42,17 +43,18 @@ def _file_type(path: Path) -> str:
 
 
 def _collect_diagnostics(path: Path) -> list[Any]:
-    from .features.diagnostics import DiagnosticsProvider
+    """Compatibility adapter returning diagnostics without source grouping.
 
-    text = path.read_text(encoding="utf-8")
-    workspace_documents = _workspace_documents(path.parent)
-    return list(
-        DiagnosticsProvider().get_diagnostics(
-            text,
-            path.resolve().as_uri(),
-            workspace_documents,
-        )
-    )
+    The actual collection seam is ``_collect_check_diagnostics``. Keeping this
+    small adapter preserves the callback used by legacy agent operations while
+    making their check path use exactly the same provider/workspace
+    implementation as the PLAN24 command.
+    """
+    return [
+        diagnostic
+        for _, diagnostics in _collect_check_diagnostics(path)
+        for diagnostic in diagnostics
+    ]
 
 
 def check_path(path: Path) -> dict[str, Any]:
@@ -109,8 +111,21 @@ def explain_logs(paths: list[Path], workdir: Path | None = None) -> dict[str, An
 
 
 def _collect_plan24_check_diagnostics(path: Path) -> list[tuple[Path, list[Any]]]:
+    """Compatibility alias for the shared check collection seam."""
+    return _collect_check_diagnostics(path)
+
+
+def _collect_check_diagnostics(path: Path) -> list[tuple[Path, list[Any]]]:
+    """Collect diagnostics for a file or calculation directory.
+
+    This is the single implementation behind both check envelopes. It owns
+    provider construction, neighbor workspace loading, candidate selection,
+    safe text reads, and deterministic traversal. Callers must only adapt the
+    returned diagnostics to their external JSON contract.
+    """
     from .features.diagnostics import DiagnosticsProvider
 
+    path = Path(path)
     provider = DiagnosticsProvider()
     if path.is_dir():
         workspace_documents = _workspace_documents(path)
@@ -121,13 +136,12 @@ def _collect_plan24_check_diagnostics(path: Path) -> list[tuple[Path, list[Any]]
             file_type = provider._get_file_type(candidate.resolve().as_uri())
             if file_type == "UNKNOWN":
                 continue
-            text = _read_text(candidate)
             results.append(
                 (
                     candidate,
                     list(
                         provider.get_diagnostics(
-                            text,
+                            _safe_read_text(candidate),
                             candidate.resolve().as_uri(),
                             workspace_documents,
                         )
@@ -136,13 +150,16 @@ def _collect_plan24_check_diagnostics(path: Path) -> list[tuple[Path, list[Any]]
             )
         return results
 
+    if _is_binary_artifact(path):
+        return []
+
     workspace_documents = _workspace_documents(path.parent)
     return [
         (
             path,
             list(
                 provider.get_diagnostics(
-                    _read_text(path),
+                    _safe_read_text(path),
                     path.resolve().as_uri(),
                     workspace_documents,
                 )
@@ -229,7 +246,23 @@ def _is_workspace_document(path: Path) -> bool:
 
 
 def _read_text(path: Path) -> str:
-    return path.read_text(encoding="utf-8", errors="ignore")
+    try:
+        return path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return ""
+
+
+def _safe_read_text(path: Path) -> str:
+    """Read a check candidate without turning an unreadable file into a crash."""
+    try:
+        return _read_text(path)
+    except OSError:
+        return ""
+
+
+def _is_binary_artifact(path: Path) -> bool:
+    """Return whether *path* is a known binary VASP restart artifact."""
+    return path.name.upper() in _BINARY_ARTIFACT_NAMES
 
 
 def _plan24_payload(
