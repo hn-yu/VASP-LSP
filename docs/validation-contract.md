@@ -2,6 +2,20 @@
 
 This document describes the supported diagnostics and validations for each VASP file type, as well as explicitly unsupported or partially supported scenarios.
 
+The contract is static and evidence-based. It does not run VASP during normal
+LSP diagnostics. When a cross-file check needs a neighbor, an unsaved open
+buffer is preferred over the same file on disk in the calculation directory.
+Unknown INCAR tags remain `Error`; schema incompleteness is fixed by adding
+reviewed metadata rather than by weakening that severity.
+
+Severity has the following meaning:
+
+- **Error**: high-confidence syntax, schema, or type/value failure likely to
+  make the input unusable.
+- **Warning**: suspicious or high-risk configuration that may still be
+  intentional.
+- **Information/Hint**: advisory documentation, style, or convergence context.
+
 ## POSCAR Diagnostics (Supported)
 
 | Check | Severity | Scope |
@@ -41,6 +55,9 @@ Diagnostics use exact line indices from the parser when available:
 - **Cartesian vs Direct**: Different range thresholds apply. Direct coordinates are checked against [0, 1] (with tolerance to -0.5/1.5). Cartesian coordinates are not range-checked but close-atom distances use Cartesian distances directly.
 - **VASP 4 format** (no atom types line): Parser generates generic `TypeN` names. Element symbol validation is skipped for these.
 - **Multiple species**: Atom type/count length mismatch is detected.
+- **CONTCAR post-coordinate data**: Legal velocity and molecular-dynamics
+  predictor-corrector sections are accepted. Unseparated numeric rows that do
+  not fit a recognized optional section remain diagnosable.
 
 ### POSCAR Limitations (Unsupported)
 
@@ -59,7 +76,7 @@ Diagnostics use exact line indices from the parser when available:
 | Gamma/Monkhorst mode: missing grid values | Error | Grid line |
 | Explicit mode: fewer than 4 values per k-point | Error | K-point rows |
 | Non-positive grid values (<=0) | Error | Grid line |
-| Very sparse grid (all values < 2) | Warning | Grid line |
+| Very sparse grid (all values < 2) | Information | Grid line |
 | Very dense grid (all values > 50) | Warning | Grid line |
 | Zero-weight k-points | Warning | K-point rows |
 | K-point coordinates outside [-1, 1] | Error | K-point rows |
@@ -88,9 +105,12 @@ Diagnostics use exact line indices from the parser:
 - No check for tetragonal/hexagonal-specific k-point grids.
 - No validation of explicit k-point coordinates against Brillouin zone boundaries.
 
-## Cross-File Diagnostics (Supported via INCAR)
+## Cross-File Diagnostics
 
-Cross-file consistency checks are triggered when editing an INCAR file with workspace neighbors available:
+Cross-file consistency checks run from the relevant input provider when the
+calculation neighbors are available. INCAR is the main semantic anchor, while
+POSCAR/CONTCAR and POTCAR can also report their own species consistency
+diagnostics. Open buffers override disk content for the same neighbor.
 
 | Check | Severity | Files |
 |-------|----------|-------|
@@ -98,6 +118,8 @@ Cross-file consistency checks are triggered when editing an INCAR file with work
 | LDAU parameter count vs POSCAR species count | Warning | INCAR + POSCAR |
 | KSPACING + KPOINTS file conflict | Warning | INCAR + KPOINTS |
 | POSCAR/POTCAR species order mismatch | Warning | INCAR + POSCAR + POTCAR |
+| POSCAR/POTCAR species-count mismatch | Warning | POSCAR/CONTCAR + POTCAR |
+| POTCAR parser failure | Error | POTCAR |
 | ENCUT below max POTCAR ENMAX | Warning | INCAR + POTCAR |
 | POTCAR functional mixing | Warning | INCAR + POTCAR |
 | ENCUT below 1.3 × max POTCAR ENMAX recommendation | Information | INCAR + POTCAR |
@@ -107,11 +129,43 @@ Cross-file consistency checks are triggered when editing an INCAR file with work
 | IBRION/NSW/POTIM/SMASS consistency | Warning/Error/Information | INCAR |
 | LSORBIT/LNONCOLLINEAR with ISPIN=2 | Warning | INCAR |
 
+POTCAR comparison preserves the complete species sequence and count. Hydrogen
+like titles such as `H1.25` and `H.75` are compared using their base species
+`H`, while their order remains significant. POSCAR VASP 4 placeholder names
+such as `Type1` are not treated as chemical symbols for a false mismatch. A
+POTCAR parse failure is reported separately instead of being relabeled as an
+order mismatch. `POTCAR.spec` is not used as POTCAR evidence.
+
+## VASP runtime-log diagnostics
+
+The runtime-log parser is a focused pattern detector, not a complete parser of
+all VASP output. It can report selected high-confidence failures, including:
+
+| Check | Severity | Sources |
+| --- | --- | --- |
+| Symmetry-analysis failure (`INVGRP`, `PRICEL`, `SGRCON`, `SGRGEN`) | Error | OUTCAR/stdout/stderr/Slurm capture |
+| Electronic-minimization failure (`EDDDAV`, `EDDRMM`, `PSSYEVX`, `ZPOTRF`) | Error | OUTCAR/stdout/stderr/Slurm capture |
+
+Use `vasp-lsp-explain` for an explicit log explanation. Directory checks also
+visit recognized runtime-log names but avoid loading large binary artifacts such
+as WAVECAR and CHGCAR as text.
+
 ## Cross-File Limitations (Unsupported)
 
 - No validation of KPOINTS grid density against POSCAR cell dimensions.
-- No validation of POTCAR-specific flavor compatibility beyond species order,
-  parser errors, functional mixing, and ENMAX/ENMIN metadata.
+- No validation of POTCAR-specific flavor compatibility beyond species order
+  and count, parser errors, functional mixing, and ENMAX/ENMIN metadata.
 - No KPOINTS grid-density recommendation derived from the reciprocal lattice.
 - No spin-orbit axis recommendation: SAXIS has an official default, so the
   server does not invent a mandatory SAXIS requirement.
+- No complete VASP runtime-log interpretation or guarantee that a run is
+  scientifically converged.
+
+## JSON validation surfaces
+
+The static CLI exposes two top-level envelopes. `vasp-lsp-tool` operation
+payloads use `DiagnosticEnvelope/v1` with `operation`, `uri`, `diagnostics`,
+`summary`, and `capabilities`. `vasp-lsp-check` and `vasp-lsp-explain` use
+`vasp-lsp.plan24.v1` with `schema_version`, `source`, `diagnostics`, and
+`summary`. They share diagnostic concepts but are separate contracts; clients
+must dispatch on the envelope identifier.
