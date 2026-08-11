@@ -201,7 +201,7 @@ def test_navigation_capability_returns_document_symbols() -> None:
 
 
 def test_lsp_rename_capability_returns_workspace_edit() -> None:
-    """Rename must return a WorkspaceEdit updating all references (#24)."""
+    """Rename must return a WorkspaceEdit for opened INCAR references (#24)."""
     # The LSP feature handlers close over the module-level server instance.
     text = "ENCUT = 520\nENCUT = 530\n"
     uri = "file:///INCAR"
@@ -219,6 +219,44 @@ def test_lsp_rename_capability_returns_workspace_edit() -> None:
         assert len(changes[uri]) == 2
     finally:
         server_module.server.documents.pop(uri, None)
+
+
+def test_lsp_rename_rejects_unknown_incar_schema_names() -> None:
+    """Rename must not manufacture a tag that diagnostics classify as unknown."""
+    text = "ENCUT = 520\n"
+    uri = "file:///INCAR"
+    _setup_server(server_module.server, uri, text)
+    try:
+        params = RenameParams(
+            text_document=TextDocumentIdentifier(uri=uri),
+            position=Position(line=0, character=2),
+            new_name="NOT_A_VASP_TAG",
+        )
+        assert server_module.rename(params) is None
+    finally:
+        server_module.server.documents.pop(uri, None)
+
+
+def test_lsp_rename_scope_is_open_documents_only() -> None:
+    """Rename must not scan or edit unopened files on disk (#24)."""
+    uri = "file:///workspace/INCAR"
+    other_open_uri = "file:///workspace/other/INCAR"
+    unopened_uri = "file:///workspace/closed/INCAR"
+    _setup_server(server_module.server, uri, "ENCUT = 520\n")
+    _setup_server(server_module.server, other_open_uri, "ENCUT = 400\n")
+    try:
+        params = RenameParams(
+            text_document=TextDocumentIdentifier(uri=uri),
+            position=Position(line=0, character=2),
+            new_name="EDIFF",
+        )
+        result = server_module.rename(params)
+        assert result is not None
+        assert set(result.changes) == {uri, other_open_uri}
+        assert unopened_uri not in result.changes
+    finally:
+        server_module.server.documents.pop(uri, None)
+        server_module.server.documents.pop(other_open_uri, None)
 
 
 def test_test_runner_capability_maps_captured_solver_output() -> None:

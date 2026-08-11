@@ -8,7 +8,6 @@ import argparse
 import json
 import logging
 import os
-import re
 import subprocess
 import tempfile
 from typing import Any, Dict, List, Optional
@@ -417,7 +416,12 @@ def prepare_rename(params: PrepareRenameParams):
 
 @server.feature(TEXT_DOCUMENT_RENAME)
 def rename(params: RenameParams):
-    """Handle rename request for INCAR parameters."""
+    """Rename an INCAR tag in currently opened documents only.
+
+    This handler deliberately does not scan the workspace or edit files that
+    are only present on disk.  The returned ``WorkspaceEdit`` covers the
+    in-memory documents held by this LSP server instance.
+    """
     uri = params.text_document.uri
     content = server.get_document_content(uri)
 
@@ -428,38 +432,30 @@ def rename(params: RenameParams):
     if file_type != "INCAR":
         return None
 
-    new_name = params.new_name.upper()
-    position = params.position
-    lines = content.split("\n")
-
-    if position.line >= len(lines):
+    old_name = server.navigation_provider.find_incar_tag_at_position(
+        content, params.position
+    )
+    if old_name is None:
         return None
 
-    line = lines[position.line]
-
-    # Find the tag name under cursor
-    match = re.match(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=", line)
-    if not match:
+    new_name = params.new_name
+    if not isinstance(new_name, str) or not new_name.isidentifier():
+        return None
+    new_name = new_name.upper()
+    if not server.navigation_provider.is_known_incar_tag(new_name):
         return None
 
-    old_name = match.group(1)
-
-    # Check that new_name is a valid INCAR tag or at least a valid identifier
-    if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", new_name):
-        return None
-
-    # Rename all occurrences of the tag across open INCAR documents.
+    # Rename occurrences only in documents currently held in memory.  Do not
+    # infer a workspace root or read sibling files from disk here.
     changes: Dict[str, List[TextEdit]] = {}
     for doc_uri, doc_content in server.documents.items():
         if _get_file_type(doc_uri) != "INCAR":
             continue
-        doc_lines = doc_content.split("\n")
         doc_edits: List[TextEdit] = []
-        for line_idx, doc_line in enumerate(doc_lines):
-            tag_match = re.match(r"^(\s*)([A-Za-z_][A-Za-z0-9_]*)\s*=", doc_line)
-            if tag_match and tag_match.group(2).upper() == old_name.upper():
-                start_char = tag_match.start(2)
-                end_char = tag_match.end(2)
+        for tag, line_idx, start_char, end_char in (
+            server.navigation_provider.find_incar_tag_occurrences(doc_content)
+        ):
+            if tag == old_name:
                 doc_edits.append(
                     TextEdit(
                         range=Range(
@@ -682,7 +678,7 @@ def _publish_diagnostics(uri: str, content: str, version: Optional[int] = None):
 
 def _get_file_type(uri: str) -> str:
     """Determine file type from URI."""
-    return document_kind(uri).value
+    return str(document_kind(uri).value)
 
 
 def main():
