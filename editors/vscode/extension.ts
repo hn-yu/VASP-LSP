@@ -24,6 +24,7 @@ export function activate(context: ExtensionContext) {
       { scheme: 'file', language: 'vasp-poscar' },
       { scheme: 'file', language: 'vasp-kpoints' },
       { scheme: 'file', language: 'vasp-potcar' },
+      { scheme: 'file', language: 'vasp-log' },
     ],
     synchronize: {
       fileEvents: workspace.createFileSystemWatcher(

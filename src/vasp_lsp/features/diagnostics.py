@@ -2,7 +2,6 @@
 
 import json
 import math
-import os
 import re
 from collections import OrderedDict
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -39,6 +38,7 @@ from ..rules import (
     rule_id_for_runtime_category,
 )
 from ..schemas.incar_tags import CALCULATION_MODES, CalculationMode, get_tag_info
+from ..workspace import CalculationWorkspace, document_kind
 
 _BOOLEAN_TRUE_TOKENS = {".TRUE.", "TRUE", "T"}
 _BOOLEAN_FALSE_TOKENS = {".FALSE.", "FALSE", "F"}
@@ -330,22 +330,7 @@ class DiagnosticsProvider:
 
     def _get_file_type(self, uri: str) -> str:
         """Determine file type from URI."""
-        path = unquote(urlparse(uri).path) if "://" in uri else uri
-        filename = path.split("/")[-1]
-        upper_filename = filename.upper()
-
-        if "INCAR" in upper_filename:
-            return "INCAR"
-        if "POTCAR" in upper_filename:
-            return "POTCAR"
-        if "POSCAR" in upper_filename or "CONTCAR" in upper_filename:
-            return "POSCAR"
-        if "KPOINTS" in upper_filename:
-            return "KPOINTS"
-        if self._is_vasp_log_filename(filename):
-            return "VASP_LOG"
-
-        return "UNKNOWN"
+        return document_kind(uri).value
 
     def _is_vasp_log_filename(self, filename: str) -> bool:
         """Return whether a filename is a VASP runtime log.
@@ -1556,10 +1541,7 @@ class DiagnosticsProvider:
 
         icharg = parser.get_parameter("ICHARG")
         if icharg and icharg.value in (1, 11):
-            chgcar_content = self._read_neighbor(
-                document_uri, "CHGCAR", workspace_documents
-            )
-            if chgcar_content is None:
+            if not self._neighbor_exists(document_uri, "CHGCAR", workspace_documents):
                 # ICHARG in {1, 11} reads a precomputed charge density from a
                 # pre-existing CHGCAR that must be present and compatible with
                 # the current run. A missing CHGCAR is an incompatible restart
@@ -1727,10 +1709,7 @@ class DiagnosticsProvider:
         diagnostics: List[Diagnostic] = []
         istart = parser.get_parameter("ISTART")
         if istart and istart.value in (1, 2, 3):
-            wavecar_content = self._read_neighbor(
-                document_uri, "WAVECAR", workspace_documents
-            )
-            if wavecar_content is None:
+            if not self._neighbor_exists(document_uri, "WAVECAR", workspace_documents):
                 # ISTART >= 1 reads plane-wave coefficients from a pre-existing
                 # WAVECAR that must be present and compatible with the current
                 # run (matching ENCUT, NBANDS, FFT mesh, parallelization
@@ -2036,29 +2015,32 @@ class DiagnosticsProvider:
         filename: str,
         workspace_documents: Optional[Dict[str, str]],
     ) -> Optional[str]:
-        if workspace_documents:
-            base_dir = os.path.dirname(self._uri_to_path(document_uri) or "")
-            for uri, content in workspace_documents.items():
-                path = self._uri_to_path(uri)
-                if not path:
-                    continue
-                if (
-                    os.path.dirname(path) == base_dir
-                    and os.path.basename(path).upper() == filename.upper()
-                ):
-                    return content
-
-        path = self._uri_to_path(document_uri)
-        if not path:
-            return None
-        neighbor = os.path.join(os.path.dirname(path), filename)
-        if not os.path.exists(neighbor):
-            return None
         try:
-            with open(neighbor, encoding="utf-8", errors="ignore") as handle:
-                return handle.read()
-        except OSError:
+            workspace = (
+                workspace_documents
+                if isinstance(workspace_documents, CalculationWorkspace)
+                else CalculationWorkspace(document_uri, workspace_documents)
+            )
+        except ValueError:
             return None
+        return workspace.read(filename)
+
+    def _neighbor_exists(
+        self,
+        document_uri: str,
+        filename: str,
+        workspace_documents: Optional[Dict[str, str]],
+    ) -> bool:
+        """Check a restart/config sibling without reading large binary files."""
+        try:
+            workspace = (
+                workspace_documents
+                if isinstance(workspace_documents, CalculationWorkspace)
+                else CalculationWorkspace(document_uri, workspace_documents)
+            )
+        except ValueError:
+            return False
+        return workspace.has(filename)
 
     def _uri_to_path(self, uri: str) -> Optional[str]:
         parsed = urlparse(uri)
@@ -2616,8 +2598,17 @@ class DiagnosticsProvider:
                         start=Position(line=grid_line, character=0),
                         end=Position(line=grid_line, character=grid_end_char),
                     ),
-                    message="K-point grid is very sparse (all values < 2).",
-                    severity=DiagnosticSeverity.Warning,
+                    message=(
+                        "K-point grid is very sparse (all values < 2); this may be "
+                        "appropriate for isolated systems or large-vacuum cells. "
+                        "Verify k-point convergence for periodic systems."
+                    ),
+                    # A sparse mesh is not intrinsically invalid.  In
+                    # particular, Gamma-only sampling is normal for isolated
+                    # molecules and many slab calculations.  Keep this as a
+                    # visible hint without presenting a context-free heuristic
+                    # as a warning.
+                    severity=DiagnosticSeverity.Information,
                     source="vasp-lsp",
                 )
             )

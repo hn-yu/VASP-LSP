@@ -46,6 +46,7 @@ vasp-lsp-check = "vasp_lsp.tool:check_main"
 vasp-lsp-explain = "vasp_lsp.tool:explain_main"
 vasp-lsp-describe = "vasp_lsp.tool:describe_main"
 vasp-lsp-schema = "vasp_lsp.tool:schema_main"
+vasp-lsp-schema-audit = "vasp_lsp.tool:schema_audit_main"
 vasp-lsp-examples = "vasp_lsp.tool:examples_main"
 
 [tool.hatch.build.targets.wheel]

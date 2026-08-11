@@ -18,6 +18,7 @@ from lsprotocol.types import (
 
 from ..parsers.incar_parser import INCARParser
 from ..schemas.incar_tags import INCAR_TAGS
+from ..workspace import document_kind
 
 
 class QuickFixesProvider:
@@ -58,16 +59,7 @@ class QuickFixesProvider:
 
     def _get_file_type(self, uri: str) -> str:
         """Determine file type from URI."""
-        filename = uri.split("/")[-1].upper()
-
-        if "INCAR" in filename:
-            return "INCAR"
-        if "POSCAR" in filename or "CONTCAR" in filename:
-            return "POSCAR"
-        if "KPOINTS" in filename:
-            return "KPOINTS"
-
-        return "UNKNOWN"
+        return document_kind(uri).value
 
     def _get_incar_code_actions(
         self, content: str, diagnostics: List[Diagnostic], range: Range

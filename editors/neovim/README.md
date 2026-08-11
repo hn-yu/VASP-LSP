@@ -8,12 +8,14 @@ be used for other servers in a larger Neovim distribution.
 
 ## Install the server
 
-Install the executable with either pip or uv:
+Install the executable with uv:
 
 ~~~bash
-pip install vasp-lsp
-# or
+# Published upstream package:
 uv tool install vasp-lsp
+
+# This fork:
+uv tool install git+https://github.com/hn-yu/VASP-LSP.git
 ~~~
 
 Check that Neovim can find it:
@@ -38,7 +40,8 @@ vim.lsp.enable("vasp_lsp")
 ~~~
 
 Neovim's filetype detection must be enabled. Most distributions, including
-LazyVim, already do this. A minimal configuration can use:
+LazyVim, already do this. The bundled LSP config also registers the standard
+VASP filenames automatically. A minimal configuration can use:
 
 ~~~lua
 vim.cmd("filetype plugin indent on")
@@ -48,12 +51,12 @@ The bundled configuration also includes a small `on_init` compatibility
 fallback that requests full-document synchronization from older VASP-LSP/pygls
 installations. New installations receive the same mode from the server itself.
 
-## Optional VASP filetype mappings
+## Additional log filetype mappings
 
-The server can diagnose OUTCAR, OSZICAR, STDOUT, STDERR, vasp.out, and Slurm
-captures such as slurm-123.out. It can also provide hover documentation for
-read-only metadata in POTCAR. Neovim does not assign a useful filetype to all
-of these names by default. Add this before vim.lsp.enable("vasp_lsp"):
+The bundled configuration registers OUTCAR, OSZICAR, STDOUT, STDERR, vasp.out,
+and Slurm captures such as slurm-123.out. If another plugin overwrites those
+filetype mappings, the following explicit mapping can be used before
+`vim.lsp.enable("vasp_lsp")`:
 
 ~~~lua
 vim.filetype.add({

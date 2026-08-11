@@ -99,13 +99,19 @@ Cross-file consistency checks are triggered when editing an INCAR file with work
 | KSPACING + KPOINTS file conflict | Warning | INCAR + KPOINTS |
 | POSCAR/POTCAR species order mismatch | Warning | INCAR + POSCAR + POTCAR |
 | ENCUT below max POTCAR ENMAX | Warning | INCAR + POTCAR |
+| POTCAR functional mixing | Warning | INCAR + POTCAR |
+| ENCUT below 1.3 × max POTCAR ENMAX recommendation | Information | INCAR + POTCAR |
 | ICHARG=1/11 without CHGCAR | Information | INCAR + CHGCAR |
 | Line-mode KPOINTS without ICHARG=11/12 | Information | INCAR + KPOINTS |
+| MDALGO outside effective molecular-dynamics mode | Warning | INCAR |
+| IBRION/NSW/POTIM/SMASS consistency | Warning/Error/Information | INCAR |
+| LSORBIT/LNONCOLLINEAR with ISPIN=2 | Warning | INCAR |
 
 ## Cross-File Limitations (Unsupported)
 
 - No validation of KPOINTS grid density against POSCAR cell dimensions.
-- No check for POTCAR functional mixing (PBE + LDA).
-- No ENCUT production recommendation (1.3x ENMAX) diagnostic.
-- No molecular dynamics parameter conflict detection (IBRION/NSW/POTIM/SMASS).
-- No spin-orbit coupling completeness check (LSORBIT without SAXIS defaults).
+- No validation of POTCAR-specific flavor compatibility beyond species order,
+  parser errors, functional mixing, and ENMAX/ENMIN metadata.
+- No KPOINTS grid-density recommendation derived from the reciprocal lattice.
+- No spin-orbit axis recommendation: SAXIS has an official default, so the
+  server does not invent a mandatory SAXIS requirement.

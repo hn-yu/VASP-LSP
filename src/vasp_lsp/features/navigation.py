@@ -15,6 +15,8 @@ from lsprotocol.types import (
     SymbolKind,
 )
 
+from ..workspace import document_kind
+
 _INCAR_TAG_RE = re.compile(r"^\s*(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=")
 
 
@@ -48,16 +50,7 @@ class DocumentSymbolsProvider:
 
     def _get_file_type(self, uri: str) -> str:
         """Determine file type from URI."""
-        filename = uri.split("/")[-1].upper()
-
-        if "INCAR" in filename:
-            return "INCAR"
-        if "POSCAR" in filename or "CONTCAR" in filename:
-            return "POSCAR"
-        if "KPOINTS" in filename:
-            return "KPOINTS"
-
-        return "UNKNOWN"
+        return document_kind(uri).value
 
     def _get_incar_symbols(self, content: str) -> List[DocumentSymbol]:
         """Get document symbols for INCAR files.

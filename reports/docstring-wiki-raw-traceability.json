@@ -5,8 +5,8 @@
   "languageId": "vasp-input",
   "generatedAt": "2026-06-15T00:00:00Z",
   "summary": {
-    "docstringsTotal": 46,
-    "docstringsLinked": 46,
+    "docstringsTotal": 50,
+    "docstringsLinked": 50,
     "wikiPagesTotal": 3,
     "rawAssetsTotal": 10,
     "ruleIdsTotal": 10,
@@ -226,6 +226,12 @@
       "docstring": "Rule manifest registry for VASP-LSP (Diagnostic Engine v1)."
     },
     {
+      "path": "src/vasp_lsp/schema_audit.py",
+      "symbol": "schema_audit",
+      "wikiPath": "wiki/concepts/VASP_Input_Validation.md",
+      "docstring": "Offline integrity checks for the generated official INCAR schema."
+    },
+    {
       "path": "src/vasp_lsp/schemas/__init__.py",
       "symbol": "__init__",
       "wikiPath": "wiki/entities/VASP_LSP.md",
@@ -290,6 +296,24 @@
       "symbol": "tool",
       "wikiPath": "wiki/synthesis/Agent_Workflow.md",
       "docstring": "Agent-facing CLI for Diagnostic Engine v1 operations."
+    },
+    {
+      "path": "src/vasp_lsp/workspace.py",
+      "symbol": "workspace",
+      "wikiPath": "wiki/concepts/VASP_Input_Validation.md",
+      "docstring": "Shared document-kind and calculation-workspace primitives."
+    },
+    {
+      "path": "src/vasp_lsp/workspace.py",
+      "symbol": "workspace",
+      "wikiPath": "wiki/entities/VASP_LSP.md",
+      "docstring": "Shared document-kind and calculation-workspace primitives."
+    },
+    {
+      "path": "src/vasp_lsp/workspace.py",
+      "symbol": "workspace",
+      "wikiPath": "wiki/synthesis/Agent_Workflow.md",
+      "docstring": "Shared document-kind and calculation-workspace primitives."
     }
   ],
   "wikiSources": [

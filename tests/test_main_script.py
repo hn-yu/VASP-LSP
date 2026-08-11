@@ -39,6 +39,7 @@ def test_main_script_version():
     # Should exit cleanly
     assert result.returncode == 0
     assert __version__ in result.stdout
+    assert "Registered builtin" not in result.stderr
 
 
 def test_run_as_main():

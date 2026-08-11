@@ -55,10 +55,11 @@ Neovim 0.11+.
 
 ## Supported File Types
 
-- **INCAR**: Main input file with 100+ supported parameters
+- **INCAR**: Main input file with the official Wiki catalog plus reviewed local metadata
 - **POSCAR**: Structure file with lattice and coordinates
 - **KPOINTS**: K-point grid specification
 - **POTCAR**: Pseudopotential metadata (parsed for ENMAX/ENMIN cross-file checks)
+- **VASP logs**: OUTCAR, OSZICAR, STDOUT/STDERR, and Slurm captures
 - **VASP runtime logs**: OUTCAR / stdout / stderr / slurm captures (parsed for runtime diagnostics)
 
 ## Features
@@ -99,7 +100,7 @@ Neovim 0.11+.
 ### Agent JSON API (Diagnostic Engine v1)
 - `vasp-lsp-check path/to/calc --format json --fail-on-blocking`
 - `vasp-lsp-explain path/to/run.out --format json`
-- `vasp-lsp-describe`, `vasp-lsp-schema ENCUT`, `vasp-lsp-examples static`
+- `vasp-lsp-describe`, `vasp-lsp-schema ENCUT`, `vasp-lsp-schema-audit`, `vasp-lsp-examples static`
 - `vasp-lsp-tool rules` exports the rule catalog
 
 ## License

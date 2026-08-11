@@ -10,6 +10,7 @@ from lsprotocol.types import (
 )
 
 from ..schemas.incar_tags import INCAR_TAG_LIST, INCAR_TAGS
+from ..workspace import document_kind
 
 
 class CompletionProvider:
@@ -69,25 +70,7 @@ class CompletionProvider:
         Returns:
             File type string (INCAR, POSCAR, KPOINTS, or UNKNOWN).
         """
-        filename = uri.split("/")[-1].upper()
-
-        # Check for exact matches
-        if filename in ["INCAR", "INCAR.", "INCAR.VASP"]:
-            return "INCAR"
-        if filename in ["POSCAR", "POSCAR.", "CONTCAR", "CONTCAR."]:
-            return "POSCAR"
-        if filename in ["KPOINTS", "KPOINTS.", "KPOINTS.VASP"]:
-            return "KPOINTS"
-
-        # Check for prefixes
-        if filename.startswith("INCAR"):
-            return "INCAR"
-        if filename.startswith("POSCAR") or filename.startswith("CONTCAR"):
-            return "POSCAR"
-        if filename.startswith("KPOINTS"):
-            return "KPOINTS"
-
-        return "UNKNOWN"
+        return document_kind(uri).value
 
     def _get_incar_completions(self, line_prefix: str, current_line: str) -> List[CompletionItem]:
         """Get completion items for INCAR files.

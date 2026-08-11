@@ -6,6 +6,7 @@ from typing import Optional
 from lsprotocol.types import Hover, HoverParams, MarkupContent, MarkupKind, Position
 
 from ..schemas.incar_tags import get_tag_info
+from ..workspace import document_kind
 
 _POTCAR_TAG_DOCS = {
     "ENMAX": (
@@ -71,18 +72,7 @@ class HoverProvider:
         Returns:
             File type string.
         """
-        filename = uri.split("/")[-1].upper()
-
-        if "INCAR" in filename:
-            return "INCAR"
-        if "POTCAR" in filename:
-            return "POTCAR"
-        if "POSCAR" in filename or "CONTCAR" in filename:
-            return "POSCAR"
-        if "KPOINTS" in filename:
-            return "KPOINTS"
-
-        return "UNKNOWN"
+        return document_kind(uri).value
 
     def _get_incar_hover(self, content: str, position: Position) -> Optional[Hover]:
         """Get hover info for INCAR files.
