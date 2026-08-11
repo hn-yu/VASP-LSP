@@ -1020,14 +1020,20 @@ class TestRenameHandler:
     """Integration tests for the rename handler."""
 
     def test_rename_returns_workspace_edit(self, server: _CaptureServer) -> None:
-        """Rename returns a workspace edit for an INCAR tag."""
+        """Rename returns an edit when the replacement is a known INCAR tag."""
         text_document_did_open(_make_did_open(INCAR_URI, "ENCUT = 400\nISMEAR = 0\nENCUT = 500"))
-        params = _make_rename_params(INCAR_URI, 0, 1, "CUTOFF")
+        params = _make_rename_params(INCAR_URI, 0, 1, "EDIFF")
         result = rename(params)
         assert result is not None
         assert result.changes is not None
         assert INCAR_URI in result.changes
         assert len(result.changes[INCAR_URI]) == 2
+
+    def test_rename_rejects_unknown_tag(self, server: _CaptureServer) -> None:
+        """Rename must not create an INCAR tag outside the official schema."""
+        text_document_did_open(_make_did_open(INCAR_URI, "ENCUT = 400"))
+        params = _make_rename_params(INCAR_URI, 0, 1, "CUTOFF")
+        assert rename(params) is None
 
     def test_rename_returns_none_for_missing(self, server: _CaptureServer) -> None:
         """Rename returns None for uncached documents."""

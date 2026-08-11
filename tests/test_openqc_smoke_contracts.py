@@ -242,6 +242,11 @@ def test_lsp_rename_scope_is_open_documents_only() -> None:
     uri = "file:///workspace/INCAR"
     other_open_uri = "file:///workspace/other/INCAR"
     unopened_uri = "file:///workspace/closed/INCAR"
+    # The smoke module exercises the module-level server alongside other
+    # tests. Isolate this contract from documents opened by earlier tests so
+    # the assertion describes the two documents in this scenario only.
+    previous_documents = dict(server_module.server.documents)
+    server_module.server.documents.clear()
     _setup_server(server_module.server, uri, "ENCUT = 520\n")
     _setup_server(server_module.server, other_open_uri, "ENCUT = 400\n")
     try:
@@ -255,8 +260,8 @@ def test_lsp_rename_scope_is_open_documents_only() -> None:
         assert set(result.changes) == {uri, other_open_uri}
         assert unopened_uri not in result.changes
     finally:
-        server_module.server.documents.pop(uri, None)
-        server_module.server.documents.pop(other_open_uri, None)
+        server_module.server.documents.clear()
+        server_module.server.documents.update(previous_documents)
 
 
 def test_test_runner_capability_maps_captured_solver_output() -> None:
